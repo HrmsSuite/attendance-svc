@@ -24,6 +24,6 @@ app.use(errorHandler);
 
 Connectdb().then(() => {
   app.listen(PORT, () => {
-    console.log(`Employee service running on port ${PORT}`);
+    console.log(`Attendence service running on port ${PORT}`);
   });
 });
