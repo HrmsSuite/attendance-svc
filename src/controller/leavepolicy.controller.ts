@@ -2,37 +2,35 @@ import { ILeavePolicy } from "@hrmssuite/persistence";
 import { NextFunction, Request, Response } from "express";
 import { LeavePolicyServices } from "../services";
 import { Types } from "mongoose";
-import { Apperror } from "../common/errorhandlers"; 
+import { Apperror } from "../common/errorhandlers";
 
 export class LeavePolicyController {
   private leavepolicyControl: LeavePolicyServices;
+
   constructor() {
     this.leavepolicyControl = new LeavePolicyServices();
   }
+
   // ── Create
   public async createLeavePolicyController(
     req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
-    //   void — not ILeavePolicy
     try {
-      console.log("companyId",req.companyId);
-      console.log("userId",req.user?.id)
-      const companyId = new Types.ObjectId(req.companyId); //  one declaration
+      const companyId = new Types.ObjectId(req.companyId);
       const userId = new Types.ObjectId(req.user?.id);
 
-      const createPolicy =
-        await this.leavepolicyControl.createLeavePolicyServices(
-          req.body,
-          companyId,
-          userId,
-        );
+      const created = await this.leavepolicyControl.createLeavePolicyServices(
+        req.body,
+        companyId,
+        userId,
+      );
 
       res.status(201).json({
         success: true,
         message: "Leave policy created successfully",
-        data: createPolicy,
+        data: created,
       });
     } catch (error) {
       next(error);
@@ -71,10 +69,11 @@ export class LeavePolicyController {
       const companyId = new Types.ObjectId(req.companyId);
       const { leaveTypeName } = req.params;
 
-      const policy = await this.leavepolicyControl.getLeavePolicyByTypeService(
-        companyId,
-        leaveTypeName as ILeavePolicy["leaveTypeName"],
-      );
+      const policy =
+        await this.leavepolicyControl.getLeavePolicyByTypeService(
+          companyId,
+          leaveTypeName as ILeavePolicy["leaveTypeName"],
+        );
 
       res.status(200).json({
         success: true,
@@ -95,10 +94,10 @@ export class LeavePolicyController {
     try {
       const companyId = new Types.ObjectId(req.companyId);
       const userId = new Types.ObjectId(req.user?.id);
-      const id = req.params.id as string; 
+      const id  = req.params.id as string;
 
       if (!id) {
-        throw new Apperror("Unauthorized", 401);
+        throw new Apperror("Policy id is required", 400);
       }
 
       const updated = await this.leavepolicyControl.editLeavePolicyServices(
@@ -127,11 +126,12 @@ export class LeavePolicyController {
     try {
       const companyId = new Types.ObjectId(req.companyId);
       const userId = new Types.ObjectId(req.user?.id);
-      const id = req.params.id as string;
+      const id  = req.params.id as string;
 
       if (!id) {
-        throw new Apperror("Unauthorized", 401);
+        throw new Apperror("Policy id is required", 400);
       }
+
       const deleted = await this.leavepolicyControl.deleteLeavePolicyService(
         id,
         companyId,

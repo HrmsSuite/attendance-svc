@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/HrmsSuite/attendance-svc#readme",
   "dependencies": {
-    "@hrmssuite/persistence": "^1.0.32",
+    "@hrmssuite/persistence": "^1.0.33",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

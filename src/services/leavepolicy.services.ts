@@ -18,12 +18,15 @@ export class LeavePolicyServices {
   ): Promise<ILeavePolicy> {
     try {
       // Step 1 — Validate
-      const parsed = LeavePolicyZodSchema.safeParse({ ...data, companyId: companyId.toString(), });
+      const parsed = LeavePolicyZodSchema.safeParse({
+        ...data,
+        companyId: companyId.toString(),
+      });
       if (!parsed.success) {
         throw new Apperror(parsed.error.issues[0].message, 400);
       }
 
-      // Step 2 — Duplicate check req.companyId null check — no throw from DAO
+      // Step 2 — Duplicate check
       const existing = await this.leavepolicy.getLeavePolicyByType(
         companyId,
         data.leaveTypeName,
@@ -39,10 +42,10 @@ export class LeavePolicyServices {
       const created = await this.leavepolicy.CreateLeavePolicy(
         data,
         companyId,
-        userId,                   //pass userId
+        userId,
       );
-
       return created;
+
     } catch (error) {
       if (error instanceof Apperror) throw error;
       throw new Apperror("Failed to create leave policy", 400);

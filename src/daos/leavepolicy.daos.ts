@@ -5,33 +5,33 @@ import { Types } from "mongoose";
 export class LeavePolicyDao {
 
   public async CreateLeavePolicy(
-    data: ILeavePolicy,
-    companyId: Types.ObjectId,
-    userId: Types.ObjectId,       //userId parameter
-  ): Promise<ILeavePolicy> {
-    try {
-      const create = await LeavePolicyModel.create({
-        ...data,
-        companyId,
-        audit: {
-          createdBy: userId,        
-          createdAt: new Date(),
-          updatedBy: userId,        
-          updatedAt: new Date(),
-        },
-      });
-      return create;
-    } catch (error) {
-      throw new Apperror("Policy not created", 400);
-    }
+  data: ILeavePolicy,
+  companyId: Types.ObjectId,
+  userId: Types.ObjectId,
+): Promise<ILeavePolicy> {
+  try {
+    const create = await LeavePolicyModel.create({
+      ...data,
+      companyId,
+      audit: {
+        createdBy: userId,
+        createdAt: new Date(),
+        updatedBy: userId,
+        updatedAt: new Date(),
+      },
+    });
+    return create;
+  } catch (error) {
+    console.error("CreateLeavePolicy error:", error); // 👈 Add this first
+    throw new Apperror("Policy not created", 400);
   }
+}
 
   public async getLeavePolicy(
     companyId: Types.ObjectId,
   ): Promise<ILeavePolicy[]> {
     try {
-      const getAll = await LeavePolicyModel.find({
-        isActive: true,
+      const getAll = await LeavePolicyModel.find({ 
         companyId,
       });
       return getAll;
@@ -89,20 +89,13 @@ export class LeavePolicyDao {
   public async deleteLeavePolicy(
     id: string,
     companyId: Types.ObjectId,
-    userId: Types.ObjectId,         //userId parameter
+    userId: Types.ObjectId,
   ): Promise<ILeavePolicy> {
     try {
-      const deleted = await LeavePolicyModel.findOneAndUpdate(
-        { _id: id, companyId },
-        {
-          $set: {
-            isActive: false,
-            "audit.updatedBy": userId,  //dot notation — correct
-            "audit.updatedAt": new Date(),
-          },
-        },
-        { new: true },
-      );
+      const deleted = await LeavePolicyModel.findOneAndDelete({
+        _id: id,
+        companyId,
+      });
 
       if (!deleted) {
         throw new Apperror("Leave policy not found", 404);
