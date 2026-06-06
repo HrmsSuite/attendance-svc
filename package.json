@@ -5,6 +5,11 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
+    "test:leave": "ts-node src/common/tests/test-leave-request.ts",
+    "test:approve": "ts-node src/common/tests/test-approve-leave.ts",
+    "test:pending": "ts-node src/common/tests/test-pending-approvals.ts",
+    "test:history": "ts-node src/common/tests/test-leave-history.ts",
+    "test:cancel": "ts-node src/common/tests/test-cancel-leave.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
@@ -20,7 +25,7 @@
   },
   "homepage": "https://github.com/HrmsSuite/attendance-svc#readme",
   "dependencies": {
-    "@hrmssuite/persistence": "^1.0.33",
+    "@hrmssuite/persistence": "^1.0.40",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
