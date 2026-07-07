@@ -21,6 +21,4 @@ Thumbs.db
 
 # TypeScript cache
 *.tsbuildinfo
-
-# NPM auth token
-.npmrc
+ 
