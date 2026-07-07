@@ -10,6 +10,13 @@
     "test:pending": "ts-node src/common/tests/test-pending-approvals.ts",
     "test:history": "ts-node src/common/tests/test-leave-history.ts",
     "test:cancel": "ts-node src/common/tests/test-cancel-leave.ts",
+    "test:checkin": "ts-node src/common/tests/attendance/checkin.test.ts",
+    "test:checkout": "ts-node src/common/tests/attendance/checkout.test.ts",
+    "test:getAttendanceDaily": "ts-node src/common/tests/attendance/getAttendanceDaily.test.ts",
+    "test:attendance-events": "ts-node src/common/tests/attendance/attendance-events.test.ts",
+    "test:latest_events": "ts-node src/common/tests/attendance/latest_events.test.ts",
+    "test:attendance-emp-history": "ts-node src/common/tests/attendance/attendance-emp-history.test.ts",
+    "test:employee-svc": "ts-node src/common/tests/employee-svc.test.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
@@ -25,7 +32,8 @@
   },
   "homepage": "https://github.com/HrmsSuite/attendance-svc#readme",
   "dependencies": {
-    "@hrmssuite/persistence": "^1.0.40",
+    "@hrmssuite/persistence": "^1.0.45",
+    "axios": "^1.18.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
