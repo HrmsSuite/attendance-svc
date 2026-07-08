@@ -114,6 +114,8 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
+      console.log("DEBUG req.user:", JSON.stringify(req.user));   // TEMP — remove after checking
+    console.log("DEBUG req.companyId:", req.companyId); 
       if (!req.user?.id) {
         throw new AttendanceError(
           "Unauthorized: user not found on request",
