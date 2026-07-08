@@ -68,4 +68,31 @@ router.post(
   ),
 );
 
+router.get(
+  "/company/history",
+  authenticate,
+  authorizeRoles("admin"),
+  Asyncwrapper((req, res, next) =>
+    attendance.getCompanyHistoryController(req, res, next),
+  ),
+);
+
+router.get(
+  "/employee/:employeeId/events",
+  authenticate,
+  authorizeRoles("admin"),
+  Asyncwrapper((req, res, next) =>
+    attendance.getEmployeeEventsHistoryController(req, res, next),
+  ),
+);
+
+router.get(
+  "/company/events",
+  authenticate,
+  authorizeRoles("admin"),
+  Asyncwrapper((req, res, next) =>
+    attendance.getCompanyEventsHistoryController(req, res, next),
+  ),
+);
+
 export default router;

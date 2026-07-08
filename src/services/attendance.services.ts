@@ -414,4 +414,42 @@ export class AttendanceServices {
       toDate,
     );
   }
+
+  public async getCompanyHistory(
+    companyId: Types.ObjectId,
+    fromDate: Date,
+    toDate: Date,
+  ) {
+    return this.attendanceDao.getCompanyAttendanceHistory(
+      companyId,
+      fromDate,
+      toDate,
+    );
+  }
+
+  public async getEmployeeEventsHistory(
+    companyId: Types.ObjectId,
+    employeeId: Types.ObjectId,
+    fromDate: Date,
+    toDate: Date,
+  ) {
+    return this.attendanceDao.getEmployeeAttendanceEventsHistory(
+      companyId,
+      employeeId,
+      fromDate,
+      toDate,
+    );
+  }
+
+  public async getCompanyEventsHistory(
+    companyId: Types.ObjectId,
+    fromDate: Date,
+    toDate: Date,
+  ) {
+    return this.attendanceDao.getCompanyAttendanceEventsHistory(
+      companyId,
+      fromDate,
+      toDate,
+    );
+  }
 }

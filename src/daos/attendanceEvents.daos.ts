@@ -235,9 +235,73 @@ export class AttendanceEventDaos {
       },
       { $set: updateData },
       {
-        returnDocument: "after",
+        new: true,
         session,
       },
     );
+  }
+
+  // AttendanceEventDaos — ADD these two methods
+
+  /**
+   * Company-wide daily summaries across a date range (admin dashboard).
+   */
+  public async getCompanyAttendanceHistory(
+    companyId: Types.ObjectId,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<IAttendanceDaily[]> {
+    return AttendanceDaily.find({
+      companyId,
+      attendanceDate: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+    })
+      .sort({ attendanceDate: -1, employeeId: 1 })
+      .lean();
+  }
+
+  /**
+   * Raw punch-event log for ONE employee across a date range.
+   * Use this for a "log view" — every individual check-in/check-out,
+   * not the collapsed daily summary.
+   */
+  public async getEmployeeAttendanceEventsHistory(
+    companyId: Types.ObjectId,
+    employeeId: Types.ObjectId,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<IAttendanceEvents[]> {
+    return AttendanceEvents.find({
+      companyId,
+      employeeId,
+      attendanceDate: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+    })
+      .sort({ eventTime: 1 })
+      .lean();
+  }
+
+  /**
+   * Raw punch-event log for the WHOLE COMPANY across a date range.
+   * Admin-only — every punch by every employee, useful for audit trails.
+   */
+  public async getCompanyAttendanceEventsHistory(
+    companyId: Types.ObjectId,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<IAttendanceEvents[]> {
+    return AttendanceEvents.find({
+      companyId,
+      attendanceDate: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+    })
+      .sort({ eventTime: -1 })
+      .lean();
   }
 }

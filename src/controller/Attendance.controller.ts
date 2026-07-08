@@ -228,14 +228,14 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      if (!req.user?.id) {
+      if (!req.user?.employeeId) {
         throw new AttendanceError(
           "Unauthorized: user not found on request",
           "UNAUTHORIZED",
         );
       }
       const companyId = new Types.ObjectId(req.companyId);
-      const employeeId = new Types.ObjectId(req.user.id);
+      const employeeId = new Types.ObjectId(req.user.employeeId);
       const fromDate = new Date(req.query.fromDate as string);
       const toDate = new Date(req.query.toDate as string);
 
@@ -301,6 +301,150 @@ export class AttendanceController {
       res.status(200).json({
         success: true,
         message: "Auto punch-out completed successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET /api/v1/attendance/company/history
+   * Admin-only: daily summaries for ALL employees, date range.
+   */
+  public async getCompanyHistoryController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = new Types.ObjectId(req.companyId);
+      const fromDate = new Date(req.query.fromDate as string);
+      const toDate = new Date(req.query.toDate as string);
+
+      if (!req.query.fromDate || !req.query.toDate) {
+        throw new AttendanceError(
+          "fromDate and toDate are required",
+          "INVALID_INPUT",
+        );
+      }
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        throw new AttendanceError(
+          "fromDate and toDate must be valid dates",
+          "INVALID_DATE_FORMAT",
+        );
+      }
+
+      const result = await this.attendanceServiceControl.getCompanyHistory(
+        companyId,
+        fromDate,
+        toDate,
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Company attendance history fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/attendance/employee/:employeeId/events?fromDate=&toDate=
+   * Admin-only: raw punch log for ONE employee, date range.
+   */
+  public async getEmployeeEventsHistoryController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const employeeIdParam = req.params.employeeId;
+      if (
+        !employeeIdParam ||
+        typeof employeeIdParam !== "string" ||
+        !Types.ObjectId.isValid(employeeIdParam)
+      ) {
+        throw new AttendanceError(
+          "Valid employeeId is required",
+          "INVALID_INPUT",
+        );
+      }
+
+      const companyId = new Types.ObjectId(req.companyId);
+      const employeeId = new Types.ObjectId(employeeIdParam);
+      const fromDate = new Date(req.query.fromDate as string);
+      const toDate = new Date(req.query.toDate as string);
+
+      if (!req.query.fromDate || !req.query.toDate) {
+        throw new AttendanceError(
+          "fromDate and toDate are required",
+          "INVALID_INPUT",
+        );
+      }
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        throw new AttendanceError(
+          "fromDate and toDate must be valid dates",
+          "INVALID_DATE_FORMAT",
+        );
+      }
+
+      const result =
+        await this.attendanceServiceControl.getEmployeeEventsHistory(
+          companyId,
+          employeeId,
+          fromDate,
+          toDate,
+        );
+
+      res.status(200).json({
+        success: true,
+        message: "Employee attendance event log fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/attendance/company/events?fromDate=&toDate=
+   * Admin-only: raw punch log for the WHOLE COMPANY — audit trail view.
+   */
+  public async getCompanyEventsHistoryController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = new Types.ObjectId(req.companyId);
+      const fromDate = new Date(req.query.fromDate as string);
+      const toDate = new Date(req.query.toDate as string);
+
+      if (!req.query.fromDate || !req.query.toDate) {
+        throw new AttendanceError(
+          "fromDate and toDate are required",
+          "INVALID_INPUT",
+        );
+      }
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        throw new AttendanceError(
+          "fromDate and toDate must be valid dates",
+          "INVALID_DATE_FORMAT",
+        );
+      }
+
+      const result =
+        await this.attendanceServiceControl.getCompanyEventsHistory(
+          companyId,
+          fromDate,
+          toDate,
+        );
+
+      res.status(200).json({
+        success: true,
+        message: "Company attendance event log fetched successfully",
         data: result,
       });
     } catch (error) {
