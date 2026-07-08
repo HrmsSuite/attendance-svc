@@ -114,16 +114,20 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      console.log("DEBUG req.user:", JSON.stringify(req.user));   // TEMP — remove after checking
-    console.log("DEBUG req.companyId:", req.companyId); 
+      
       if (!req.user?.id) {
         throw new AttendanceError(
           "Unauthorized: user not found on request",
           "UNAUTHORIZED",
         );
       }
+
+      console.log("DEBUG req.user:", JSON.stringify(req.user));   // TEMP — remove after checking
+      console.log("DEBUG req.companyId:", req.companyId); 
       const companyId = new Types.ObjectId(req.companyId);
       const employeeId = new Types.ObjectId(req.user.id);
+
+      
 
       const result = await this.attendanceServiceControl.getTodaySummary(
         companyId,
