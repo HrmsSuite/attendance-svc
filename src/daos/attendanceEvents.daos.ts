@@ -43,7 +43,7 @@ export class AttendanceEventDaos {
         { $set: dailyData },
         {
           upsert: true,
-          returnDocument: "after",
+          new: true,
           session,
         },
       );
@@ -123,7 +123,7 @@ export class AttendanceEventDaos {
         },
         { $set: dailyData },
         {
-          returnDocument: "after",
+          new: true,
           session,
         },
       );

@@ -9,10 +9,8 @@ export class AttendanceController {
 
   constructor() {
     const employeeClient = new EmployeeClient();
-    
-    this.attendanceServiceControl = new AttendanceServices(
-      employeeClient
-    );
+
+    this.attendanceServiceControl = new AttendanceServices(employeeClient);
   }
 
   // ── Check In ───────────────────────────────────────────────────────────────
@@ -27,12 +25,11 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId);
-      const employeeId = new Types.ObjectId(req.body.employeeId);
-
       if (!req.body.employeeId) {
         throw new AttendanceError("Employee ID is required", "INVALID_INPUT");
       }
+      const companyId = new Types.ObjectId(req.companyId);
+      const employeeId = new Types.ObjectId(req.body.employeeId);
 
       const result = await this.attendanceServiceControl.checkIn(
         companyId,
@@ -103,8 +100,14 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
+      if (!req.user?.id) {
+        throw new AttendanceError(
+          "Unauthorized: user not found on request",
+          "UNAUTHORIZED",
+        );
+      }
       const companyId = new Types.ObjectId(req.companyId);
-      const employeeId = new Types.ObjectId(req.user?.id);
+      const employeeId = new Types.ObjectId(req.user.id);
 
       const result = await this.attendanceServiceControl.getTodaySummary(
         companyId,
@@ -133,15 +136,21 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
+      if (!req.user?.id) {
+        throw new AttendanceError(
+          "Unauthorized: user not found on request",
+          "UNAUTHORIZED",
+        );
+      }
       const companyId = new Types.ObjectId(req.companyId);
-      const employeeId = new Types.ObjectId(req.user?.id);
+      const employeeId = new Types.ObjectId(req.user.id);
       const fromDate = new Date(req.query.fromDate as string);
       const toDate = new Date(req.query.toDate as string);
 
       if (!req.query.fromDate || !req.query.toDate) {
         throw new AttendanceError(
           "fromDate and toDate are required",
-          "INVALID_INPUT"
+          "INVALID_INPUT",
         );
       }
 
@@ -181,7 +190,7 @@ export class AttendanceController {
       if (!req.body.attendanceDate) {
         throw new AttendanceError(
           "attendanceDate is required",
-          "INVALID_INPUT"
+          "INVALID_INPUT",
         );
       }
 
