@@ -115,7 +115,7 @@ export class AttendanceController {
   ): Promise<void> {
     try {
       
-      if (!req.user?.id) {
+      if (!req.user?.employeeId) {
         throw new AttendanceError(
           "Unauthorized: user not found on request",
           "UNAUTHORIZED",
@@ -125,7 +125,7 @@ export class AttendanceController {
       console.log("DEBUG req.user:", JSON.stringify(req.user));   // TEMP — remove after checking
       console.log("DEBUG req.companyId:", req.companyId); 
       const companyId = new Types.ObjectId(req.companyId);
-      const employeeId = new Types.ObjectId(req.user.id);
+      const employeeId = new Types.ObjectId(req.user.employeeId);
 
       
 
