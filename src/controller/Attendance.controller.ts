@@ -114,7 +114,6 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      
       if (!req.user?.employeeId) {
         throw new AttendanceError(
           "Unauthorized: user not found on request",
@@ -122,12 +121,10 @@ export class AttendanceController {
         );
       }
 
-      console.log("DEBUG req.user:", JSON.stringify(req.user));   // TEMP — remove after checking
-      console.log("DEBUG req.companyId:", req.companyId); 
+      console.log("DEBUG req.user:", JSON.stringify(req.user)); // TEMP — remove after checking
+      console.log("DEBUG req.companyId:", req.companyId);
       const companyId = new Types.ObjectId(req.companyId);
       const employeeId = new Types.ObjectId(req.user.employeeId);
-
-      
 
       const result = await this.attendanceServiceControl.getTodaySummary(
         companyId,
@@ -137,6 +134,81 @@ export class AttendanceController {
       res.status(200).json({
         success: true,
         message: "Today's attendance summary fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // AttendanceController
+
+  /**
+   * GET /api/v1/attendance/employee/:employeeId/today-summary
+   * Admin-only: view any employee's attendance summary for today
+   */
+  public async getEmployeeTodaySummaryController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = new Types.ObjectId(req.companyId);
+      const employeeId = new Types.ObjectId(req.params.employeeId as string);
+
+      const result = await this.attendanceServiceControl.getTodaySummary(
+        companyId,
+        employeeId,
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Employee's today summary fetched successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/attendance/employee/:employeeId/history
+   * Admin-only: view any employee's attendance history
+   */
+  public async getEmployeeHistoryController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = new Types.ObjectId(req.companyId);
+      const employeeId = new Types.ObjectId(req.params.employeeId as string);
+      const fromDate = new Date(req.query.fromDate as string);
+      const toDate = new Date(req.query.toDate as string);
+
+      if (!req.query.fromDate || !req.query.toDate) {
+        throw new AttendanceError(
+          "fromDate and toDate are required",
+          "INVALID_INPUT",
+        );
+      }
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        throw new AttendanceError(
+          "fromDate and toDate must be valid dates",
+          "INVALID_DATE_FORMAT",
+        );
+      }
+
+      const result = await this.attendanceServiceControl.getHistory(
+        companyId,
+        employeeId,
+        fromDate,
+        toDate,
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Employee's attendance history fetched successfully",
         data: result,
       });
     } catch (error) {

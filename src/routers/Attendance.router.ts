@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { authenticate } from "@hrmssuite/persistence";
-import { Asyncwrapper } from "../common/middleware"; 
+import { authenticate, authorizeRoles } from "@hrmssuite/persistence";
+import { Asyncwrapper } from "../common/middleware";
 import { AttendanceController } from "../controller";
 
 const router = Router();
@@ -33,6 +33,23 @@ router.get(
   ),
 );
 
+router.get(
+  "/employee/:employeeId/today-summary",
+  authenticate,
+  authorizeRoles("admin"),
+  Asyncwrapper((req, res, next) =>
+    attendance.getEmployeeTodaySummaryController(req, res, next),
+  ),
+);
+
+router.get(
+  "/employee/:employeeId/history",
+  authenticate,
+  authorizeRoles("admin"),
+  Asyncwrapper((req, res, next) =>
+    attendance.getEmployeeHistoryController(req, res, next),
+  ),
+);
 // ── Get History
 router.get(
   "/history",
