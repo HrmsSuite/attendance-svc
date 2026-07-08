@@ -61,6 +61,16 @@ export class AttendanceServices {
       );
     }
 
+    console.log("Request shiftId:", input.shiftId);
+    console.log(
+      "Employee shiftId:",
+      JSON.stringify(employee.data.job.shiftId, null, 2),
+    );
+    console.log(
+      "Employee shiftId toString():",
+      employee.data.job.shiftId?.toString?.(),
+    );
+
     //  3. Validate shiftId matches employee's assigned shift
     const passedShiftId = input.shiftId.toString();
     const employeeShiftId = employee.data.job.shiftId.toString();
