@@ -19,7 +19,7 @@ export interface IEmployee {
 }
 
 export class EmployeeClient {
-  private employeeSvcUrl = process.env.EMPLOYEE_SVC_URL || "https://employee-service-production-b41c.up.railway.app";
+  private employeeSvcUrl = "https://employee-service-production-b41c.up.railway.app";
   private serviceToken = process.env.EMPLOYEE_SVC_SERVICE_TOKEN;  
 
 
