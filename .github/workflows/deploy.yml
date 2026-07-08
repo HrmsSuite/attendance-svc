@@ -29,6 +29,9 @@ jobs:
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/attendance-service:latest
 
-      - name: Deploy to Render
-        run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+      - name: Deploy to Railway
+        uses: docker://ghcr.io/railwayapp/cli:latest
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        with:
+          args: railway redeploy --service ${{ secrets.RAILWAY_SERVICE_ID }} -y
