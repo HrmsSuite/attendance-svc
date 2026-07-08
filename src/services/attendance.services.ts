@@ -73,7 +73,10 @@ export class AttendanceServices {
 
     //  3. Validate shiftId matches employee's assigned shift
     const passedShiftId = input.shiftId.toString();
-    const employeeShiftId = employee.data.job.shiftId.toString();
+    const employeeShiftId =
+      typeof employee.data.job.shiftId === "string"
+        ? employee.data.job.shiftId
+        : (employee.data.job.shiftId as any)._id;
 
     if (passedShiftId !== employeeShiftId) {
       throw new AttendanceError(
