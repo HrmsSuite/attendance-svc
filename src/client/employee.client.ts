@@ -32,7 +32,7 @@ export class EmployeeClient {
           },
         }
       );
-      return response.data as IEmployee;
+      return response.data.data as IEmployee;
     } catch (error: any) {
       if (error.response?.status === 404) return null;
       throw error;
@@ -50,7 +50,7 @@ export class EmployeeClient {
           },
         }
       );
-      return response.data;
+      return response.data.data.data;
     } catch (error: any) {
       if (error.response?.status === 404) return null;
       throw error;
