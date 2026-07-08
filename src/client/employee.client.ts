@@ -19,50 +19,43 @@ export interface IEmployee {
 }
 
 export class EmployeeClient {
-  private employeeSvcUrl = "https://employee-service-production-b41c.up.railway.app";
-  private serviceToken = process.env.EMPLOYEE_SVC_SERVICE_TOKEN;  
+  private employeeSvcUrl = process.env.EMPLOYEE_SVC_URL || "https://employee-service-production-b41c.up.railway.app";
 
-
-  async getEmployee(employeeId: string, companyId: string): Promise<IEmployee | null> {
+  async getEmployee(employeeId: string, companyId: string, authToken: string): Promise<IEmployee | null> {
     try {
       const response = await axios.get(
         `${this.employeeSvcUrl}/api/v1/employees/${employeeId}`,
         {
           headers: {
-            Authorization: `Bearer ${this.serviceToken}`,  
-            "x-company-id": companyId,  
+            Authorization: authToken,   // forward the real incoming token
+            "x-company-id": companyId,
           },
         }
       );
       return response.data as IEmployee;
-    } catch (error:any) {
-      if (error.response?.status === 404) {
-        return null;
-      }
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
       throw error;
     }
   }
 
-  async getShift(shiftId: string, companyId: string): Promise<any | null> {
+  async getShift(shiftId: string, companyId: string, authToken: string): Promise<any | null> {
     try {
       const response = await axios.get(
         `${this.employeeSvcUrl}/api/v1/shift/${shiftId}`,
         {
           headers: {
-            Authorization: `Bearer ${this.serviceToken}`, 
+            Authorization: authToken,
             "x-company-id": companyId,
           },
         }
       );
       return response.data;
-    } catch (error:any) {
-      if (error.response?.status === 404) {
-        return null;
-      }
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
       throw error;
     }
   }
 }
 
-// Export an instantiated instance
-export const employeeClient = new EmployeeClient();
+export const employeeClient = new EmployeeClient(); 

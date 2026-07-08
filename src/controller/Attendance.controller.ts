@@ -30,11 +30,18 @@ export class AttendanceController {
       }
       const companyId = new Types.ObjectId(req.companyId);
       const employeeId = new Types.ObjectId(req.body.employeeId);
-
+      const authToken = req.headers.authorization; // ADD — same token the client sent to attendance-service
+      if (!authToken) {
+        throw new AttendanceError(
+          "Missing authorization header",
+          "UNAUTHORIZED",
+        );
+      }
       const result = await this.attendanceServiceControl.checkIn(
         companyId,
         employeeId,
         req.body,
+        authToken,
       );
 
       res.status(201).json({
@@ -68,11 +75,18 @@ export class AttendanceController {
       if (!req.body.employeeId) {
         throw new AttendanceError("Employee ID is required", "INVALID_INPUT");
       }
-
+      const authToken = req.headers.authorization; // ADD — same token the client sent to attendance-service
+      if (!authToken) {
+        throw new AttendanceError(
+          "Missing authorization header",
+          "UNAUTHORIZED",
+        );
+      }
       const result = await this.attendanceServiceControl.checkOut(
         companyId,
         employeeId,
         req.body,
+        authToken,
       );
 
       res.status(200).json({
@@ -193,10 +207,17 @@ export class AttendanceController {
           "INVALID_INPUT",
         );
       }
-
+      const authToken = req.headers.authorization;
+      if (!authToken) {
+        throw new AttendanceError(
+          "Missing authorization header",
+          "UNAUTHORIZED",
+        );
+      }
       const result = await this.attendanceServiceControl.runAutoPunchOut(
         companyId,
         attendanceDate,
+        authToken,
       );
 
       res.status(200).json({

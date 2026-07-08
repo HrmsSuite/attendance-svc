@@ -2,7 +2,7 @@ import { Types } from "mongoose";
 import { IAttendanceDaily, IAttendanceEvents } from "@hrmssuite/persistence";
 
 import { AttendanceEventDaos } from "../daos";
-import { IShift } from "../typings"; 
+import { IShift } from "../typings";
 import {
   CheckInInput,
   checkInSchema,
@@ -33,6 +33,7 @@ export class AttendanceServices {
     companyId: Types.ObjectId,
     employeeId: Types.ObjectId,
     rawInput: unknown,
+    authToken: string,
   ) {
     const input = checkInSchema.parse(rawInput) as CheckInInput;
     const now = input.eventTime ?? new Date();
@@ -42,6 +43,7 @@ export class AttendanceServices {
     const employee = await this.employeeClient.getEmployee(
       employeeId.toString(),
       companyId.toString(),
+      authToken,
     );
 
     if (!employee) {
@@ -82,6 +84,7 @@ export class AttendanceServices {
     const shiftData = await this.employeeClient.getShift(
       passedShiftId,
       companyId.toString(),
+      authToken,
     );
 
     if (!shiftData) {
@@ -100,7 +103,7 @@ export class AttendanceServices {
 
     const shift: IShift = {
       _id: new Types.ObjectId(passedShiftId),
-      companyId:companyId,
+      companyId: companyId,
       data: shiftData,
     };
 
@@ -155,6 +158,7 @@ export class AttendanceServices {
     companyId: Types.ObjectId,
     employeeId: Types.ObjectId,
     rawInput: unknown,
+    authToken: string,
   ) {
     const input = checkOutSchema.parse(rawInput) as CheckOutInput;
     const now = input.eventTime ?? new Date();
@@ -164,6 +168,7 @@ export class AttendanceServices {
     const employee = await this.employeeClient.getEmployee(
       employeeId.toString(),
       companyId.toString(),
+      authToken,
     );
 
     if (!employee || employee.data.job.employeeStatus !== "Active") {
@@ -210,6 +215,7 @@ export class AttendanceServices {
     const shiftData = await this.employeeClient.getShift(
       daily.shiftId.toString(),
       companyId.toString(),
+      authToken,
     );
 
     if (!shiftData) {
@@ -228,7 +234,7 @@ export class AttendanceServices {
 
     const shift: IShift = {
       _id: daily.shiftId,
-      companyId:companyId,
+      companyId: companyId,
       data: shiftData,
     };
 
@@ -289,6 +295,7 @@ export class AttendanceServices {
   public async runAutoPunchOut(
     companyId: Types.ObjectId,
     attendanceDate: Date,
+    authToken: string,
   ) {
     const incompleteRecords = await this.attendanceDao.getCompanyAttendance(
       companyId,
@@ -308,6 +315,7 @@ export class AttendanceServices {
         const shiftData = await this.employeeClient.getShift(
           record.shiftId.toString(),
           companyId.toString(),
+          authToken,
         );
 
         if (!shiftData) {
@@ -319,7 +327,7 @@ export class AttendanceServices {
 
         const shift: IShift = {
           _id: record.shiftId,
-          companyId:companyId,
+          companyId: companyId,
           data: shiftData,
         };
 
@@ -333,10 +341,15 @@ export class AttendanceServices {
           return null;
         }
 
-        return this.checkOut(companyId, record.employeeId, {
-          source: "AUTO",
-          eventTime: boundaries.autoPunchOutAt,
-        });
+        return this.checkOut(
+          companyId,
+          record.employeeId,
+          {
+            source: "AUTO",
+            eventTime: boundaries.autoPunchOutAt,
+          },
+          authToken,
+        );
       }),
     );
 
