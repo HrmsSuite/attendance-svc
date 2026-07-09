@@ -80,7 +80,6 @@ router.get(
 router.get(
   "/employee/:employeeId/events",
   authenticate,
-  authorizeRoles("admin"),
   Asyncwrapper((req, res, next) =>
     attendance.getEmployeeEventsHistoryController(req, res, next),
   ),
