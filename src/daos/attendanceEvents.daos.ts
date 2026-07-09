@@ -207,17 +207,80 @@ export class AttendanceEventDaos {
     employeeId: Types.ObjectId,
     fromDate: Date,
     toDate: Date,
-  ): Promise<IAttendanceDaily[]> {
-    return AttendanceDaily.find({
-      companyId,
-      employeeId,
-      attendanceDate: {
-        $gte: fromDate,
-        $lte: toDate,
+  ): Promise<any[]> {
+    return AttendanceDaily.aggregate([
+      {
+        $match: {
+          companyId,
+          employeeId,
+          attendanceDate: {
+            $gte: fromDate,
+            $lte: toDate,
+          },
+        },
       },
-    })
-      .sort({ attendanceDate: -1 })
-      .lean();
+
+      {
+        $lookup: {
+          from: "employees",
+          localField: "employeeId",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $unwind: {
+          path: "$employee",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $lookup: {
+          from: "shifts",
+          localField: "shiftId",
+          foreignField: "_id",
+          as: "shift",
+        },
+      },
+      {
+        $unwind: {
+          path: "$shift",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $addFields: {
+          employeeName: {
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$employee.data.basic.firstName", ""] },
+                  " ",
+                  { $ifNull: ["$employee.data.basic.lastName", ""] },
+                ],
+              },
+            },
+          },
+          employeeCode: "$employee.data.basic.employeeId",
+          shiftName: "$shift.data.name",
+        },
+      },
+
+      {
+        $project: {
+          employee: 0,
+          shift: 0,
+        },
+      },
+
+      {
+        $sort: {
+          attendanceDate: -1,
+        },
+      },
+    ]);
   }
 
   public async updateAttendanceDaily(
@@ -250,16 +313,80 @@ export class AttendanceEventDaos {
     companyId: Types.ObjectId,
     fromDate: Date,
     toDate: Date,
-  ): Promise<IAttendanceDaily[]> {
-    return AttendanceDaily.find({
-      companyId,
-      attendanceDate: {
-        $gte: fromDate,
-        $lte: toDate,
+  ): Promise<any[]> {
+    return AttendanceDaily.aggregate([
+      {
+        $match: {
+          companyId,
+          attendanceDate: {
+            $gte: fromDate,
+            $lte: toDate,
+          },
+        },
       },
-    })
-      .sort({ attendanceDate: -1, employeeId: 1 })
-      .lean();
+
+      {
+        $lookup: {
+          from: "employees",
+          localField: "employeeId",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $unwind: {
+          path: "$employee",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $lookup: {
+          from: "shifts",
+          localField: "shiftId",
+          foreignField: "_id",
+          as: "shift",
+        },
+      },
+      {
+        $unwind: {
+          path: "$shift",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $addFields: {
+          employeeName: {
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$employee.data.basic.firstName", ""] },
+                  " ",
+                  { $ifNull: ["$employee.data.basic.lastName", ""] },
+                ],
+              },
+            },
+          },
+          employeeCode: "$employee.data.basic.employeeId",
+          shiftName: "$shift.data.name",
+        },
+      },
+
+      {
+        $project: {
+          employee: 0,
+          shift: 0,
+        },
+      },
+
+      {
+        $sort: {
+          attendanceDate: -1,
+          employeeId: 1,
+        },
+      },
+    ]);
   }
 
   /**
@@ -272,19 +399,81 @@ export class AttendanceEventDaos {
     employeeId: Types.ObjectId,
     fromDate: Date,
     toDate: Date,
-  ): Promise<IAttendanceEvents[]> {
-    return AttendanceEvents.find({
-      companyId,
-      employeeId,
-      attendanceDate: {
-        $gte: fromDate,
-        $lte: toDate,
+  ): Promise<any[]> {
+    return AttendanceEvents.aggregate([
+      {
+        $match: {
+          companyId,
+          employeeId,
+          attendanceDate: {
+            $gte: fromDate,
+            $lte: toDate,
+          },
+        },
       },
-    })
-      .sort({ eventTime: 1 })
-      .lean();
-  }
 
+      {
+        $lookup: {
+          from: "employees",
+          localField: "employeeId",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $unwind: {
+          path: "$employee",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $lookup: {
+          from: "shifts",
+          localField: "employee.data.job.shiftId",
+          foreignField: "_id",
+          as: "shift",
+        },
+      },
+      {
+        $unwind: {
+          path: "$shift",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $addFields: {
+          employeeName: {
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$employee.data.basic.firstName", ""] },
+                  " ",
+                  { $ifNull: ["$employee.data.basic.lastName", ""] },
+                ],
+              },
+            },
+          },
+          employeeCode: "$employee.data.basic.employeeId",
+          shiftName: "$shift.data.name",
+        },
+      },
+
+      {
+        $project: {
+          employee: 0,
+          shift: 0,
+        },
+      },
+
+      {
+        $sort: {
+          eventTime: 1,
+        },
+      },
+    ]);
+  }
   /**
    * Raw punch-event log for the WHOLE COMPANY across a date range.
    * Admin-only — every punch by every employee, useful for audit trails.
@@ -293,15 +482,78 @@ export class AttendanceEventDaos {
     companyId: Types.ObjectId,
     fromDate: Date,
     toDate: Date,
-  ): Promise<IAttendanceEvents[]> {
-    return AttendanceEvents.find({
-      companyId,
-      attendanceDate: {
-        $gte: fromDate,
-        $lte: toDate,
+  ): Promise<any[]> {
+    return AttendanceEvents.aggregate([
+      {
+        $match: {
+          companyId,
+          attendanceDate: {
+            $gte: fromDate,
+            $lte: toDate,
+          },
+        },
       },
-    })
-      .sort({ eventTime: -1 })
-      .lean();
+
+      {
+        $lookup: {
+          from: "employees",
+          localField: "employeeId",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $unwind: {
+          path: "$employee",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $lookup: {
+          from: "shifts",
+          localField: "employee.data.job.shiftId",
+          foreignField: "_id",
+          as: "shift",
+        },
+      },
+      {
+        $unwind: {
+          path: "$shift",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $addFields: {
+          employeeName: {
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$employee.data.basic.firstName", ""] },
+                  " ",
+                  { $ifNull: ["$employee.data.basic.lastName", ""] },
+                ],
+              },
+            },
+          },
+          employeeCode: "$employee.data.basic.employeeId",
+          shiftName: "$shift.data.name",
+        },
+      },
+
+      {
+        $project: {
+          employee: 0,
+          shift: 0,
+        },
+      },
+
+      {
+        $sort: {
+          eventTime: -1,
+        },
+      },
+    ]);
   }
 }

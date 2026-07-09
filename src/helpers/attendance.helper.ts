@@ -23,7 +23,7 @@ export interface CheckInAnalysis {
 export interface CheckOutAnalysis {
   workingMinutes: number;
   breakMinutes: number;
-  effectiveMinutes: number;    // workingMinutes - breakMinutes
+  effectiveMinutes: number; // workingMinutes - breakMinutes
   overtimeMinutes: number;
   earlyExitMinutes: number;
   payableDayFraction: number;
@@ -105,7 +105,11 @@ export const analyseCheckIn = (
   const diffMinutes = Math.floor(diffMs / 60_000);
 
   if (diffMinutes <= 0) {
-    return { lateMinutes: 0, isLate: false, earlyMinutes: Math.abs(diffMinutes) };
+    return {
+      lateMinutes: 0,
+      isLate: false,
+      earlyMinutes: Math.abs(diffMinutes),
+    };
   }
 
   return {
@@ -163,9 +167,15 @@ export const analyseCheckOut = (
     effectiveMinutes,
     shift.workingHours,
     shift.halfDayThreshold,
+    shift.gracePeriodMinutes,
   );
 
-  const status = computeStatus(effectiveMinutes, shift.workingHours, shift.halfDayThreshold);
+  const status = computeStatus(
+    effectiveMinutes,
+    shift.workingHours,
+    shift.halfDayThreshold,
+    shift.gracePeriodMinutes,
+  );
 
   return {
     workingMinutes: rawMinutes,
@@ -192,9 +202,21 @@ export const computeStatus = (
   effectiveMinutes: number,
   workingHours: number,
   halfDayThreshold: number,
+  gracePeriodMinutes: number,
 ): AttendanceStatus => {
-  if (effectiveMinutes >= workingHours) return "PRESENT";
-  if (effectiveMinutes >= halfDayThreshold) return "HALF_DAY";
+  const fullDayThreshold = Math.max(
+    halfDayThreshold,
+    workingHours - gracePeriodMinutes,
+  );
+
+  if (effectiveMinutes >= fullDayThreshold) {
+    return "PRESENT";
+  }
+
+  if (effectiveMinutes >= halfDayThreshold) {
+    return "HALF_DAY";
+  }
+
   return "ABSENT";
 };
 
@@ -202,9 +224,21 @@ export const computePayableFraction = (
   effectiveMinutes: number,
   workingHours: number,
   halfDayThreshold: number,
+  gracePeriodMinutes: number,
 ): number => {
-  if (effectiveMinutes >= workingHours) return 1;
-  if (effectiveMinutes >= halfDayThreshold) return 0.5;
+  const fullDayThreshold = Math.max(
+    halfDayThreshold,
+    workingHours - gracePeriodMinutes,
+  );
+
+  if (effectiveMinutes >= fullDayThreshold) {
+    return 1;
+  }
+
+  if (effectiveMinutes >= halfDayThreshold) {
+    return 0.5;
+  }
+
   return 0;
 };
 
@@ -218,7 +252,8 @@ export const shouldAutoPunchOut = (
   checkInTime: Date,
   boundaries: ShiftBoundaries,
   now: Date = new Date(),
-): boolean => now >= boundaries.autoPunchOutAt && checkInTime < boundaries.autoPunchOutAt;
+): boolean =>
+  now >= boundaries.autoPunchOutAt && checkInTime < boundaries.autoPunchOutAt;
 
 /**
  * The effective check-out time used when auto punch-out fires.
