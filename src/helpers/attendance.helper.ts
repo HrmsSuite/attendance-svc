@@ -97,13 +97,24 @@ export const resolveShiftBoundaries = (
  *   checkIn at 09:20, shift 09:00, grace 15 min → lateMinutes=20, isLate=true
  *   checkIn at 08:50, shift 09:00                → earlyMinutes=10, lateMinutes=0
  */
+
 export const analyseCheckIn = (
   checkInTime: Date,
   boundaries: ShiftBoundaries,
 ): CheckInAnalysis => {
+  console.log("========== ATTENDANCE DEBUG ==========");
+  console.log("CheckIn Local:", checkInTime);
+  console.log("CheckIn UTC:", checkInTime.toISOString());
+
+  console.log("Shift Start Local:", boundaries.shiftStart);
+  console.log("Shift Start UTC:", boundaries.shiftStart.toISOString());
+
+  console.log("Grace Deadline Local:", boundaries.graceDeadline);
+  console.log("Grace Deadline UTC:", boundaries.graceDeadline.toISOString());
   const diffMs = checkInTime.getTime() - boundaries.shiftStart.getTime();
   const diffMinutes = Math.floor(diffMs / 60_000);
-
+  console.log("Late Minutes:", diffMinutes);
+  console.log("=====================================");
   if (diffMinutes <= 0) {
     return {
       lateMinutes: 0,
