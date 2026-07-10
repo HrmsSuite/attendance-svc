@@ -51,11 +51,14 @@ export const resolveShiftTime = (
   isEndOfNightShift = false,
 ): Date => {
   const [hours, minutes] = hmString.split(":").map(Number);
+
   const resolved = new Date(baseDate);
-  resolved.setHours(hours, minutes, 0, 0);
+
+  // Convert IST shift time to UTC
+  resolved.setUTCHours(hours - 5, minutes - 30, 0, 0);
 
   if (isEndOfNightShift) {
-    resolved.setDate(resolved.getDate() + 1);
+    resolved.setUTCDate(resolved.getUTCDate() + 1);
   }
 
   return resolved;
