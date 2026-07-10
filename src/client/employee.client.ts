@@ -14,6 +14,8 @@ export interface IEmployee {
       employeeStatus: string;
       shiftId: string;
       attendanceMode: string;
+      department: string; 
+
     };
   };
 }

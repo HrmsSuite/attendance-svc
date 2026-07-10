@@ -13,12 +13,12 @@ export class LeaveRequestServices {
 
   // CREATE (business logic added)
   public async createLeaveRequest(input: any, companyId: string) {
-    console.log("📥 Service received input:", input);
-    console.log("📥 Service received companyId:", companyId);
+    console.log(" Service received input:", input);
+    console.log(" Service received companyId:", companyId);
 
     if (!companyId) throw new Error("companyId is required");
     const data = createLeaveRequestSchema.parse(input);
-    console.log("✅ Zod parsed data:", data);
+    console.log(" Zod parsed data:", data);
     const startDate = new Date(data.startDate);
     const endDate = new Date(data.endDate);
 

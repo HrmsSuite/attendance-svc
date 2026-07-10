@@ -16,6 +16,7 @@ import {
   resolveAutoPunchOutTime,
   resolveShiftBoundaries,
   shouldAutoPunchOut,
+  validateAttendanceEligibility,
 } from "../helpers";
 import { EmployeeClient } from "../client/employee.client";
 import { AttendanceError } from "../common/errorhandlers";
@@ -43,6 +44,7 @@ export class AttendanceServices {
     const employee = await this.employeeClient.getEmployee(
       employeeId.toString(),
       companyId.toString(),
+
       authToken,
     );
 
@@ -60,6 +62,13 @@ export class AttendanceServices {
         "EMPLOYEE_INACTIVE",
       );
     }
+
+    await validateAttendanceEligibility(
+      companyId,
+      employeeId,
+      new Types.ObjectId(employee.data.job.department),
+      attendanceDate,
+    );
 
     console.log("Request shiftId:", input.shiftId);
     console.log(
