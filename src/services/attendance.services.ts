@@ -62,14 +62,20 @@ export class AttendanceServices {
         "EMPLOYEE_INACTIVE",
       );
     }
-
+    const departmentId = employee.data.job.department;
+    console.log("departmentId:", departmentId);
+    console.log("departmentId type:", typeof departmentId);
+    console.log("departmentId constructor:", departmentId?.constructor?.name);
+    console.log("attendanceDate:", attendanceDate);
+    console.log("companyId:", companyId);
+    console.log("employeeId:", employeeId);
     await validateAttendanceEligibility(
       companyId,
       employeeId,
-      new Types.ObjectId(employee.data.job.department),
+      new Types.ObjectId(departmentId),
       attendanceDate,
     );
-
+    console.log("Attendance eligibility passed");
     console.log("Request shiftId:", input.shiftId);
     console.log(
       "Employee shiftId:",

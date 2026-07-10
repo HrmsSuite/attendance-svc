@@ -47,6 +47,11 @@ export const validateHolidayEvent = async (
   departmentId: Types.ObjectId,
   attendanceDate: Date,
 ): Promise<AttendanceValidationResult> => {
+    console.log("========== HOLIDAY VALIDATION ==========");
+  console.log("companyId:", companyId.toString());
+  console.log("employeeId:", employeeId.toString());
+  console.log("departmentId:", departmentId.toString());
+  console.log("attendanceDate:", attendanceDate);
   const holiday = await CalendarEventModel.findOne({
     companyId,
     eventType: "holiday",
@@ -70,13 +75,13 @@ export const validateHolidayEvent = async (
       },
     ],
   }).lean();
-
+  console.log("Holiday Found:", holiday);
   if (!holiday) {
     return {
       allowed: true,
     };
   }
-
+  console.log("Holiday Matched:", holiday.eventName);
   return {
     allowed: false,
     reason: `${holiday.eventName}. Attendance is not allowed.`,
