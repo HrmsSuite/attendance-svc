@@ -62,13 +62,14 @@ export class AttendanceServices {
         "EMPLOYEE_INACTIVE",
       );
     }
-    const departmentId = employee.data.job.department;
+    const department = employee.data.job.department;
+
+    console.log("department:", department);
+
+    const departmentId = (employee.data.job.department as any)._id;
+
     console.log("departmentId:", departmentId);
-    console.log("departmentId type:", typeof departmentId);
-    console.log("departmentId constructor:", departmentId?.constructor?.name);
-    console.log("attendanceDate:", attendanceDate);
-    console.log("companyId:", companyId);
-    console.log("employeeId:", employeeId);
+
     await validateAttendanceEligibility(
       companyId,
       employeeId,
