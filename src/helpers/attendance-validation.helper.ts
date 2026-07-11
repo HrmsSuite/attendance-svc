@@ -120,7 +120,7 @@ export const validateWeeklyOff = (
   if (weeklyOffs.includes(dayName)) {
     return {
       allowed: false,
-      reason: `${dayName} is configured as a weekly off for your shift`,
+      reason: `Today is configured as a weekly off for your shift`,
     };
   }
 
