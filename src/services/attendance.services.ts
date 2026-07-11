@@ -17,6 +17,8 @@ import {
   resolveShiftBoundaries,
   shouldAutoPunchOut,
   validateAttendanceEligibility,
+  validateShiftTiming,
+  validateWeeklyOff,
 } from "../helpers";
 import { EmployeeClient } from "../client/employee.client";
 import { AttendanceError } from "../common/errorhandlers";
@@ -135,6 +137,24 @@ export class AttendanceServices {
       companyId: companyId,
       data: shiftData,
     };
+
+    const weeklyOffResult = validateWeeklyOff(shift.data, attendanceDate);
+
+    if (!weeklyOffResult.allowed) {
+      throw new AttendanceError(
+        weeklyOffResult.reason ?? "Weekly off",
+        "WEEKLY_OFF",
+      );
+    }
+
+    const shiftResult = validateShiftTiming(shift.data, attendanceDate, now);
+
+    if (!shiftResult.allowed) {
+      throw new AttendanceError(
+        shiftResult.reason ?? "Shift ended",
+        "SHIFT_ENDED",
+      );
+    }
 
     // 6. Resolve gate-times for this attendance day
     const boundaries = resolveShiftBoundaries(shift.data, attendanceDate);
@@ -266,7 +286,7 @@ export class AttendanceServices {
       companyId: companyId,
       data: shiftData,
     };
-
+ 
     const boundaries = resolveShiftBoundaries(shift.data, attendanceDate);
 
     // 4. Auto punch-out override

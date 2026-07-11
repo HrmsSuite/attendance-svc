@@ -1,9 +1,8 @@
-import {
-  CalendarEventModel,
-  LeaveRequestModel,
-} from "@hrmssuite/persistence";
+import { CalendarEventModel, LeaveRequestModel } from "@hrmssuite/persistence";
 import { Types } from "mongoose";
 import { Apperror } from "../common/errorhandlers";
+import { resolveShiftBoundaries } from "./attendance.helper";
+import { IShiftData } from "../typings";
 
 export interface AttendanceValidationResult {
   allowed: boolean;
@@ -47,7 +46,7 @@ export const validateHolidayEvent = async (
   departmentId: Types.ObjectId,
   attendanceDate: Date,
 ): Promise<AttendanceValidationResult> => {
-    console.log("========== HOLIDAY VALIDATION ==========");
+  console.log("========== HOLIDAY VALIDATION ==========");
   console.log("companyId:", companyId.toString());
   console.log("employeeId:", employeeId.toString());
   console.log("departmentId:", departmentId.toString());
@@ -88,6 +87,48 @@ export const validateHolidayEvent = async (
   };
 };
 
+export const validateShiftTiming = (
+  shift: IShiftData,
+  attendanceDate: Date,
+  now: Date = new Date(),
+): AttendanceValidationResult => {
+  const boundaries = resolveShiftBoundaries(shift, attendanceDate);
+
+  if (now > boundaries.shiftEnd) {
+    return {
+      allowed: false,
+      reason:
+        "Your shift has already ended. Please submit an attendance regularization request.",
+    };
+  }
+
+  return {
+    allowed: true,
+  };
+};
+
+export const validateWeeklyOff = (
+  shift: IShiftData,
+  attendanceDate: Date,
+): AttendanceValidationResult => {
+  const dayName = attendanceDate.toLocaleDateString("en-US", {
+    weekday: "long",
+  });
+
+  const weeklyOffs = shift.weeklyOff ?? [];
+
+  if (weeklyOffs.includes(dayName)) {
+    return {
+      allowed: false,
+      reason: `${dayName} is configured as a weekly off for your shift`,
+    };
+  }
+
+  return {
+    allowed: true,
+  };
+};
+
 /**
  * Master attendance validation.
  *
@@ -99,33 +140,20 @@ export const validateAttendanceEligibility = async (
   companyId: Types.ObjectId,
   employeeId: Types.ObjectId,
   departmentId: Types.ObjectId,
-  attendanceDate: Date,
+  attendanceDate: Date, 
 ): Promise<void> => {
   const [leaveResult, holidayResult] = await Promise.all([
-    validateEmployeeLeave(
-      companyId,
-      employeeId,
-      attendanceDate,
-    ),
-    validateHolidayEvent(
-      companyId,
-      employeeId,
-      departmentId,
-      attendanceDate,
-    ),
+    validateEmployeeLeave(companyId, employeeId, attendanceDate),
+    validateHolidayEvent(companyId, employeeId, departmentId, attendanceDate),
   ]);
-
+  
   if (!leaveResult.allowed) {
-    throw new Apperror(
-      leaveResult.reason ?? "Attendance not allowed",
-      400,
-    );
+    throw new Apperror(leaveResult.reason ?? "Attendance not allowed", 400);
   }
 
   if (!holidayResult.allowed) {
-    throw new Apperror(
-      holidayResult.reason ?? "Attendance not allowed",
-      400,
-    );
+    throw new Apperror(holidayResult.reason ?? "Attendance not allowed", 400);
   }
+ 
 };
+
