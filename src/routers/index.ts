@@ -4,6 +4,7 @@ import calendarEvent from "./calendarEvent.routes";
 import leaverequest from "./leaverequest.router";
 import leavebalance from "./leavebalance.routes";
 import attendance from "./Attendance.router";
+import regularizepolicy from "./regularizepolicy.router";
 const router = Router();
 
 const apiPath = "/api/v1";
@@ -13,4 +14,5 @@ router.use(`${apiPath}/events/`, calendarEvent);
 router.use(`${apiPath}/leaverequest/`, leaverequest);
 router.use(`${apiPath}/leavebalance/`, leavebalance);
 router.use(`${apiPath}/attendance/`, attendance);
+router.use(`${apiPath}/regularizepolicy/`, regularizepolicy);
 export default router;
