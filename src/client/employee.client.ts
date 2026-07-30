@@ -14,25 +14,39 @@ export interface IEmployee {
       employeeStatus: string;
       shiftId: string;
       attendanceMode: string;
-      department: string; 
-
+      department: string;
     };
   };
 }
 
-export class EmployeeClient {
-  private employeeSvcUrl = process.env.EMPLOYEE_SVC_URL || "https://employee-service-production-b41c.up.railway.app";
+export interface HierarchyMeResponse {
+  success: boolean;
+  data: {
+    me: string;
+    reports: string[];
+    visibleEmployeeIds: string[];
+  };
+}
 
-  async getEmployee(employeeId: string, companyId: string, authToken: string): Promise<IEmployee | null> {
+export class EmployeeClient {
+  private employeeSvcUrl =
+    process.env.EMPLOYEE_SVC_URL ||
+    "https://employee-service-production-b41c.up.railway.app";
+
+  async getEmployee(
+    employeeId: string,
+    companyId: string,
+    authToken: string,
+  ): Promise<IEmployee | null> {
     try {
       const response = await axios.get(
         `${this.employeeSvcUrl}/api/v1/employees/${employeeId}`,
         {
           headers: {
-            Authorization: authToken,   // forward the real incoming token
+            Authorization: authToken,
             "x-company-id": companyId,
           },
-        }
+        },
       );
       return response.data.data as IEmployee;
     } catch (error: any) {
@@ -41,7 +55,11 @@ export class EmployeeClient {
     }
   }
 
-  async getShift(shiftId: string, companyId: string, authToken: string): Promise<any | null> {
+  async getShift(
+    shiftId: string,
+    companyId: string,
+    authToken: string,
+  ): Promise<any | null> {
     try {
       const response = await axios.get(
         `${this.employeeSvcUrl}/api/v1/shift/${shiftId}`,
@@ -50,7 +68,7 @@ export class EmployeeClient {
             Authorization: authToken,
             "x-company-id": companyId,
           },
-        }
+        },
       );
       return response.data.data.data;
     } catch (error: any) {
@@ -58,6 +76,21 @@ export class EmployeeClient {
       throw error;
     }
   }
+
+  // NEW: get hierarchy for the current user (self + reports)
+  async getHierarchyMe(
+    authToken: string,
+  ): Promise<HierarchyMeResponse["data"]> {
+    const response = await axios.get<HierarchyMeResponse>(
+      `${this.employeeSvcUrl}/api/v1/hierarchy/me`,
+      {
+        headers: {
+          Authorization: authToken,
+        },
+      },
+    );
+    return response.data.data;
+  }
 }
 
-export const employeeClient = new EmployeeClient(); 
+export const employeeClient = new EmployeeClient();

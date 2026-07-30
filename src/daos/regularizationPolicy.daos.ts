@@ -12,6 +12,7 @@ export class AttendanceRegularizationPolicyDao {
       "companyId" | "createdAt" | "updatedAt"
     >,
   ): Promise<IAttendanceRegularizationPolicy> {
+    console.log("CREATE POLICY DAO HIT");
     const policy = await attendanceRegularizationPolicyModel.create({
       companyId,
       ...data,

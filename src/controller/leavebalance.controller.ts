@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import { Types } from "mongoose";
 import { LeaveBalanceService } from "../services";
-import { Apperror } from "../common/errorhandlers";
+import { Apperror } from "../common/errorhandlers"; 
+import { employeeClient } from "../client/employee.client";
 
 export class LeaveBalanceController {
   private leaveBalanceService: LeaveBalanceService;
@@ -10,17 +11,39 @@ export class LeaveBalanceController {
     this.leaveBalanceService = new LeaveBalanceService();
   }
 
-  // ── Get All
+  // ── Get All (with hierarchy-based visibility)
   public async getAllLeaveBalance(
     req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId);
+      const companyId = new Types.ObjectId(req.companyId as string);
+      const user = req.user as any;
 
-      const leaveBalances =
-        await this.leaveBalanceService.getAllLeaveBalance(companyId);
+      const hierarchy = await employeeClient.getHierarchyMe(
+        req.headers.authorization as string,
+      );
+
+      const visibleEmployeeIds =
+        user.role === "admin" ? [] : hierarchy.visibleEmployeeIds;
+
+      let leaveBalances;
+
+      if (user.role === "admin") {
+        leaveBalances =
+          await this.leaveBalanceService.getAllLeaveBalance(companyId);
+      } else {
+        const employeeIds = visibleEmployeeIds.map(
+          (id) => new Types.ObjectId(id),
+        );
+
+        leaveBalances =
+          await this.leaveBalanceService.getLeaveBalancesForEmployees(
+            companyId,
+            employeeIds,
+          );
+      }
 
       res.status(200).json({
         success: true,
@@ -32,18 +55,35 @@ export class LeaveBalanceController {
     }
   }
 
-  // ── Get By Employee
+  // ── Get By Employee (with visibility check)
   public async getLeaveBalanceById(
     req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId);
+      const companyId = new Types.ObjectId(req.companyId as string);
+      const user = req.user as any;
       const { employeeId } = req.params;
 
       if (!employeeId || Array.isArray(employeeId)) {
         throw new Apperror("Invalid employee id", 400);
+      }
+
+      const hierarchy = await employeeClient.getHierarchyMe(
+        req.headers.authorization as string,
+      );
+
+      const visibleEmployeeIds =
+        user.role === "admin" ? [] : hierarchy.visibleEmployeeIds;
+
+      const isAdmin = user.role === "admin";
+      const isSelf = user.employeeId === employeeId;
+      const isVisible =
+        isAdmin || isSelf || visibleEmployeeIds.includes(employeeId);
+
+      if (!isVisible) {
+        throw new Apperror("Forbidden", 403);
       }
 
       const leaveBalance = await this.leaveBalanceService.getLeaveBalanceById(
@@ -60,17 +100,17 @@ export class LeaveBalanceController {
       next(error);
     }
   }
+
+  // ── Get My Leave Balance
   public async getMyLeaveBalance(
     req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = (req as any).user?.companyId;
-      const employeeId = (req as any).user?.employeeId;
-
-      console.log("companyId:", companyId);
-      console.log("employeeId:", employeeId);
+      const user = req.user as any;
+      const companyId = user.companyId as string;
+      const employeeId = user.employeeId as string;
 
       if (!companyId || !employeeId) {
         throw new Apperror("Unauthorized", 401);

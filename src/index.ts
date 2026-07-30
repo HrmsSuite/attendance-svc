@@ -7,16 +7,16 @@ import { Connectdb } from "./common/Db/connect";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000; 
+const PORT = process.env.PORT || 5000;
 app.use(
-   cors({
+  cors({
     origin: [
       "http://localhost:5173",
       "https://hrms-suite.netlify.app",
       "https://dev-hrms-suite.vercel.app",
     ],
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json({ limit: "50mb" }));

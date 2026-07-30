@@ -22,4 +22,14 @@ export class LeaveBalanceService {
       employeeId,
     );
   }
+
+public async getLeaveBalancesForEmployees(
+  companyId: Types.ObjectId,
+  employeeIds: Types.ObjectId[],
+): Promise<LeaveBalanceDetail[]> {
+  return await this.leaveBalanceDao.getLeaveBalancesForEmployees(
+    companyId,
+    employeeIds,
+  );
+}
 }

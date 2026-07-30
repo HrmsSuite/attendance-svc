@@ -19,6 +19,7 @@ export class AttendanceRegularizationPolicyService {
     companyId: Types.ObjectId,
     payload: CreateAttendanceRegularizationPolicyDto,
   ) {
+    console.log("CREATE POLICY SERVICE HIT");
     const validated = AttendanceRegularizationPolicySchema.parse(payload);
 
     AttendanceRegularizationPolicyHelper.validatePolicy(validated);
