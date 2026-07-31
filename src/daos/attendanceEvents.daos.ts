@@ -556,4 +556,88 @@ export class AttendanceEventDaos {
       },
     ]);
   }
+
+  /**
+   * Raw punch-event log for a specific set of employees (hierarchy-based).
+   */
+  public async getCompanyAttendanceEventsHistoryForEmployees(
+    companyId: Types.ObjectId,
+    employeeIds: Types.ObjectId[],
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<any[]> {
+    return AttendanceEvents.aggregate([
+      {
+        $match: {
+          companyId,
+          employeeId: { $in: employeeIds },
+          attendanceDate: {
+            $gte: fromDate,
+            $lte: toDate,
+          },
+        },
+      },
+
+      {
+        $lookup: {
+          from: "employees",
+          localField: "employeeId",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $unwind: {
+          path: "$employee",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $lookup: {
+          from: "shifts",
+          localField: "employee.data.job.shiftId",
+          foreignField: "_id",
+          as: "shift",
+        },
+      },
+      {
+        $unwind: {
+          path: "$shift",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $addFields: {
+          employeeName: {
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$employee.data.basic.firstName", ""] },
+                  " ",
+                  { $ifNull: ["$employee.data.basic.lastName", ""] },
+                ],
+              },
+            },
+          },
+          employeeCode: "$employee.data.basic.employeeId",
+          shiftName: "$shift.data.name",
+        },
+      },
+
+      {
+        $project: {
+          employee: 0,
+          shift: 0,
+        },
+      },
+
+      {
+        $sort: {
+          eventTime: -1,
+        },
+      },
+    ]);
+  }
 }

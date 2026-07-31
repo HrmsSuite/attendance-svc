@@ -286,7 +286,7 @@ export class AttendanceServices {
       companyId: companyId,
       data: shiftData,
     };
- 
+
     const boundaries = resolveShiftBoundaries(shift.data, attendanceDate);
 
     // 4. Auto punch-out override
@@ -484,6 +484,19 @@ export class AttendanceServices {
   ) {
     return this.attendanceDao.getCompanyAttendanceEventsHistory(
       companyId,
+      fromDate,
+      toDate,
+    );
+  }
+  public async getCompanyEventsHistoryForEmployees(
+    companyId: Types.ObjectId,
+    employeeIds: Types.ObjectId[],
+    fromDate: Date,
+    toDate: Date,
+  ) {
+    return this.attendanceDao.getCompanyAttendanceEventsHistoryForEmployees(
+      companyId,
+      employeeIds,
       fromDate,
       toDate,
     );

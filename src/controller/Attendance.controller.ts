@@ -410,7 +410,9 @@ export class AttendanceController {
 
   /**
    * GET /api/v1/attendance/company/events?fromDate=&toDate=
-   * Admin-only: raw punch log for the WHOLE COMPANY — audit trail view.
+   * Visible to:
+   * - Admin: all employees
+   * - Others: only visible employees (self + reports)
    */
   public async getCompanyEventsHistoryController(
     req: Request,
@@ -418,7 +420,10 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId);
+      const companyIdStr = req.companyId as string;
+      const companyId = new Types.ObjectId(companyIdStr);
+      const user = req.user as any;
+
       const fromDate = new Date(req.query.fromDate as string);
       const toDate = new Date(req.query.toDate as string);
 
@@ -435,12 +440,41 @@ export class AttendanceController {
         );
       }
 
-      const result =
-        await this.attendanceServiceControl.getCompanyEventsHistory(
+      const authHeader = req.headers.authorization as string;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        throw new AttendanceError("Unauthorized", "UNAUTHORIZED");
+      }
+
+      // Get hierarchy from employee-svc
+      const employeeClient = new EmployeeClient();
+      const hierarchy = await employeeClient.getHierarchyMe(authHeader);
+
+      const visibleEmployeeIds =
+        user.role === "admin" ? [] : hierarchy.visibleEmployeeIds;
+
+      let result;
+
+      if (user.role === "admin") {
+        // Admin: all employees
+        result = await this.attendanceServiceControl.getCompanyEventsHistory(
           companyId,
           fromDate,
           toDate,
         );
+      } else {
+        // Non-admin: only visible employees
+        const employeeIds = visibleEmployeeIds.map(
+          (id) => new Types.ObjectId(id),
+        );
+
+        result =
+          await this.attendanceServiceControl.getCompanyEventsHistoryForEmployees(
+            companyId,
+            employeeIds,
+            fromDate,
+            toDate,
+          );
+      }
 
       res.status(200).json({
         success: true,
