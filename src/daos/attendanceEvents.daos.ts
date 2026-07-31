@@ -640,4 +640,88 @@ export class AttendanceEventDaos {
       },
     ]);
   }
+  /**
+ * Company-wide daily summaries across a date range, filtered by employee set.
+ */
+public async getCompanyAttendanceHistoryForEmployees(
+  companyId: Types.ObjectId,
+  employeeIds: Types.ObjectId[],
+  fromDate: Date,
+  toDate: Date,
+): Promise<any[]> {
+  return AttendanceDaily.aggregate([
+    {
+      $match: {
+        companyId,
+        employeeId: { $in: employeeIds },
+        attendanceDate: {
+          $gte: fromDate,
+          $lte: toDate,
+        },
+      },
+    },
+
+    {
+      $lookup: {
+        from: "employees",
+        localField: "employeeId",
+        foreignField: "_id",
+        as: "employee",
+      },
+    },
+    {
+      $unwind: {
+        path: "$employee",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $lookup: {
+        from: "shifts",
+        localField: "shiftId",
+        foreignField: "_id",
+        as: "shift",
+      },
+    },
+    {
+      $unwind: {
+        path: "$shift",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $addFields: {
+        employeeName: {
+          $trim: {
+            input: {
+              $concat: [
+                { $ifNull: ["$employee.data.basic.firstName", ""] },
+                " ",
+                { $ifNull: ["$employee.data.basic.lastName", ""] },
+              ],
+            },
+          },
+        },
+        employeeCode: "$employee.data.basic.employeeId",
+        shiftName: "$shift.data.name",
+      },
+    },
+
+    {
+      $project: {
+        employee: 0,
+        shift: 0,
+      },
+    },
+
+    {
+      $sort: {
+        attendanceDate: -1,
+        employeeId: 1,
+      },
+    },
+  ]);
+}
 }

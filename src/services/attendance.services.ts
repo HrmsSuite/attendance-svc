@@ -501,4 +501,17 @@ export class AttendanceServices {
       toDate,
     );
   }
+  public async getCompanyHistoryForEmployees(
+  companyId: Types.ObjectId,
+  employeeIds: Types.ObjectId[],
+  fromDate: Date,
+  toDate: Date,
+) {
+  return this.attendanceDao.getCompanyAttendanceHistoryForEmployees(
+    companyId,
+    employeeIds,
+    fromDate,
+    toDate,
+  );
+}
 }
