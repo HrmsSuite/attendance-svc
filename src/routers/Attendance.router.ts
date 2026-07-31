@@ -50,7 +50,8 @@ router.get(
     attendance.getEmployeeHistoryController(req, res, next),
   ),
 );
-// ── Get History
+
+// ── Get History (self)
 router.get(
   "/history",
   authenticate,
@@ -59,7 +60,7 @@ router.get(
   ),
 );
 
-// ── Run Auto Punch Out (typically called by scheduled job)
+// ── Run Auto Punch Out
 router.post(
   "/auto-punch-out",
   authenticate,
@@ -68,10 +69,11 @@ router.post(
   ),
 );
 
+// ── Company history (admin = all, others = visible employees)
 router.get(
   "/company/history",
   authenticate,
-  authorizeRoles("admin"),
+  // authorizeRoles("admin"), // ← remove or comment out
   Asyncwrapper((req, res, next) =>
     attendance.getCompanyHistoryController(req, res, next),
   ),
@@ -80,15 +82,18 @@ router.get(
 router.get(
   "/employee/:employeeId/events",
   authenticate,
+  // For this one, you can also remove admin-only if you want hierarchy-based access
+  // authorizeRoles("admin"),
   Asyncwrapper((req, res, next) =>
     attendance.getEmployeeEventsHistoryController(req, res, next),
   ),
 );
 
+// ── Company events (admin = all, others = visible employees)
 router.get(
   "/company/events",
   authenticate,
-  authorizeRoles("admin"),
+  // authorizeRoles("admin"), // ← remove or comment out
   Asyncwrapper((req, res, next) =>
     attendance.getCompanyEventsHistoryController(req, res, next),
   ),
