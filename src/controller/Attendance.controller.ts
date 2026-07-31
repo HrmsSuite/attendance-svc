@@ -173,7 +173,9 @@ export class AttendanceController {
 
   /**
    * GET /api/v1/attendance/employee/:employeeId/history
-   * Admin-only: view any employee's attendance history
+   * Visible to:
+   * - Admin: any employee
+   * - Others: only visible employees (self + reports)
    */
   public async getEmployeeHistoryController(
     req: Request,
@@ -181,8 +183,18 @@ export class AttendanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId);
-      const employeeId = new Types.ObjectId(req.params.employeeId as string);
+      const companyIdStr = req.companyId as string;
+      const companyId = new Types.ObjectId(companyIdStr);
+      const user = req.user as any;
+
+      const employeeIdParam = req.params.employeeId as string;
+      if (!employeeIdParam || !Types.ObjectId.isValid(employeeIdParam)) {
+        throw new AttendanceError(
+          "Valid employeeId is required",
+          "INVALID_INPUT",
+        );
+      }
+
       const fromDate = new Date(req.query.fromDate as string);
       const toDate = new Date(req.query.toDate as string);
 
@@ -198,6 +210,30 @@ export class AttendanceController {
           "INVALID_DATE_FORMAT",
         );
       }
+
+      const authHeader = req.headers.authorization as string;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        throw new AttendanceError("Unauthorized", "UNAUTHORIZED");
+      }
+
+      // Get hierarchy from employee-svc
+      const employeeClient = new EmployeeClient();
+      const hierarchy = await employeeClient.getHierarchyMe(authHeader);
+
+      const visibleEmployeeIds =
+        user.role === "admin" ? [] : hierarchy.visibleEmployeeIds;
+
+      // Determine if this employeeId is allowed
+      const isAdmin = user.role === "admin";
+      const isSelf = user.employeeId === employeeIdParam;
+      const isVisible =
+        isAdmin || isSelf || visibleEmployeeIds.includes(employeeIdParam);
+
+      if (!isVisible) {
+        throw new AttendanceError("Forbidden: insufficient permissions", 403);
+      }
+
+      const employeeId = new Types.ObjectId(employeeIdParam);
 
       const result = await this.attendanceServiceControl.getHistory(
         companyId,

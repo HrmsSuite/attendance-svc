@@ -45,7 +45,7 @@ router.get(
 router.get(
   "/employee/:employeeId/history",
   authenticate,
-  authorizeRoles("admin"),
+  // authorizeRoles("admin"),
   Asyncwrapper((req, res, next) =>
     attendance.getEmployeeHistoryController(req, res, next),
   ),
