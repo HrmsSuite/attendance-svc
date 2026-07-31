@@ -36,7 +36,7 @@ router.get(
 router.get(
   "/employee/:employeeId/today-summary",
   authenticate,
-  authorizeRoles("admin"),
+  // authorizeRoles("admin"),
   Asyncwrapper((req, res, next) =>
     attendance.getEmployeeTodaySummaryController(req, res, next),
   ),
