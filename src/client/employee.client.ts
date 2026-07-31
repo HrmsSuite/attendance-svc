@@ -77,12 +77,12 @@ export class EmployeeClient {
     }
   }
 
-  // NEW: get hierarchy for the current user (self + reports)
+  // NEW: get hierarchy for the current user (self + report)
   async getHierarchyMe(
     authToken: string,
   ): Promise<HierarchyMeResponse["data"]> {
     const response = await axios.get<HierarchyMeResponse>(
-      `${this.employeeSvcUrl}/api/v1/hierarchy/me`,
+      `${this.employeeSvcUrl}/api/v1/internal/hierarchy/`,
       {
         headers: {
           Authorization: authToken,

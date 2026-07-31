@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { Types } from "mongoose";
 import { LeaveBalanceService } from "../services";
-import { Apperror } from "../common/errorhandlers"; 
+import { Apperror } from "../common/errorhandlers";
 import { employeeClient } from "../client/employee.client";
 
 export class LeaveBalanceController {
@@ -18,12 +18,17 @@ export class LeaveBalanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyIdStr = req.companyId as string;
+      const companyId = new Types.ObjectId(companyIdStr);
       const user = req.user as any;
 
-      const hierarchy = await employeeClient.getHierarchyMe(
-        req.headers.authorization as string,
-      );
+      const authHeader = req.headers.authorization as string | undefined;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        throw new Apperror("Unauthorized", 401);
+      }
+
+      // Get hierarchy from employee-svc
+      const hierarchy = await employeeClient.getHierarchyMe(authHeader);
 
       const visibleEmployeeIds =
         user.role === "admin" ? [] : hierarchy.visibleEmployeeIds;
@@ -31,8 +36,9 @@ export class LeaveBalanceController {
       let leaveBalances;
 
       if (user.role === "admin") {
-        leaveBalances =
-          await this.leaveBalanceService.getAllLeaveBalance(companyId);
+        leaveBalances = await this.leaveBalanceService.getAllLeaveBalance(
+          companyId,
+        );
       } else {
         const employeeIds = visibleEmployeeIds.map(
           (id) => new Types.ObjectId(id),
@@ -50,7 +56,14 @@ export class LeaveBalanceController {
         message: "Leave balances fetched successfully",
         data: leaveBalances,
       });
-    } catch (error) {
+    } catch (error: any) {
+      // Log more details for debugging
+      console.error("getAllLeaveBalance error:", {
+        message: error?.message,
+        status: error?.response?.status,
+        data: error?.response?.data,
+        configUrl: error?.config?.url,
+      });
       next(error);
     }
   }
@@ -62,7 +75,8 @@ export class LeaveBalanceController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyIdStr = req.companyId as string;
+      const companyId = new Types.ObjectId(companyIdStr);
       const user = req.user as any;
       const { employeeId } = req.params;
 
@@ -70,9 +84,12 @@ export class LeaveBalanceController {
         throw new Apperror("Invalid employee id", 400);
       }
 
-      const hierarchy = await employeeClient.getHierarchyMe(
-        req.headers.authorization as string,
-      );
+      const authHeader = req.headers.authorization as string | undefined;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        throw new Apperror("Unauthorized", 401);
+      }
+
+      const hierarchy = await employeeClient.getHierarchyMe(authHeader);
 
       const visibleEmployeeIds =
         user.role === "admin" ? [] : hierarchy.visibleEmployeeIds;
@@ -96,7 +113,13 @@ export class LeaveBalanceController {
         message: "Leave balance fetched successfully",
         data: leaveBalance,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("getLeaveBalanceById error:", {
+        message: error?.message,
+        status: error?.response?.status,
+        data: error?.response?.data,
+        configUrl: error?.config?.url,
+      });
       next(error);
     }
   }
