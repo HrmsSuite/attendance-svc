@@ -167,7 +167,10 @@ export class AttendanceController {
         isAdmin || isSelf || visibleEmployeeIds.includes(employeeIdParam);
 
       if (!isVisible) {
-        throw new AttendanceError("Forbidden: insufficient permissions", 403);
+        throw new AttendanceError(
+          "Forbidden: insufficient permissions",
+          "FORBIDDEN",
+        );
       }
 
       const employeeId = new Types.ObjectId(employeeIdParam);
@@ -240,7 +243,10 @@ export class AttendanceController {
         isAdmin || isSelf || visibleEmployeeIds.includes(employeeIdParam);
 
       if (!isVisible) {
-        throw new AttendanceError("Forbidden: insufficient permissions", 403);
+        throw new AttendanceError(
+          "Forbidden: insufficient permissions",
+          "FORBIDDEN",
+        );
       }
 
       const employeeId = new Types.ObjectId(employeeIdParam);
@@ -475,7 +481,10 @@ export class AttendanceController {
         isAdmin || isSelf || visibleEmployeeIds.includes(employeeIdParam);
 
       if (!isVisible) {
-        throw new AttendanceError("Forbidden: insufficient permissions", 403);
+        throw new AttendanceError(
+          "Forbidden: insufficient permissions",
+          "FORBIDDEN",
+        );
       }
 
       const employeeId = new Types.ObjectId(employeeIdParam);
