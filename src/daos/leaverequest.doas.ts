@@ -94,17 +94,15 @@ export class LeaveRequestDao {
     try {
       session.startTransaction();
 
-      // Single aggregation replaces 3 separate findOne / findById calls
       const { employeeId, managerId } = await this.resolveEmployeeAndManager(
         data.employeeId,
         companyId,
         session,
       );
 
-      // Fetch leavePolicy + leaveBalance in parallel — no dependency between them
       const [leavePolicy, leaveBalanceDoc] = await Promise.all([
         LeavePolicyModel.findById(data.leavePolicyId)
-          .select("approvalLevels")
+          .select("approvalLevels approvalConfig")
           .session(session),
         LeaveBalanceModel.findOne({ employeeId, companyId }).session(session),
       ]);
@@ -119,23 +117,24 @@ export class LeaveRequestDao {
       if (data.totalDays > leaveEntry.balance)
         throw new Error("Insufficient leave balance");
 
-      // Build approval chain
-      const approvalChain: any[] = [];
+      const approvalChain: IApprovalStep[] = [];
 
-      if (leavePolicy.approvalLevels >= 1) {
-        approvalChain.push({
-          level: 1,
-          role: "manager",
-          approverId: managerId,
-          status: "pending",
-        });
-      }
+      // Use approvalConfig instead of hardcoding "manager"/"admin"
+      const stepsToCreate = leavePolicy.approvalConfig
+        .filter((step) => step.level <= leavePolicy.approvalLevels)
+        .sort((a, b) => a.level - b.level);
 
-      if (leavePolicy.approvalLevels >= 2) {
+      for (const stepConfig of stepsToCreate) {
+        const approverId = await resolveApproverFromConfig(
+          stepConfig,
+          { ...data, employeeId, managerId } as ILeaveRequest,
+          session,
+        );
+
         approvalChain.push({
-          level: 2,
-          role: "admin",
-          approverId: companyId,
+          level: stepConfig.level,
+          role: stepConfig.type,
+          approverId,
           status: "pending",
         });
       }
@@ -156,7 +155,7 @@ export class LeaveRequestDao {
             attachmentUrl: data.attachmentUrl || undefined,
             status: "pending",
             approvalChain,
-            currentLevel: 1,
+            currentLevel: approvalChain[0]?.level ?? null,
             handoverEmployeeId: data.handoverEmployeeId || undefined,
             activityLog: [
               {
