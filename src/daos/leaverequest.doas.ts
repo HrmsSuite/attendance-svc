@@ -1,12 +1,14 @@
 import {
   AccountsModel,
   EmployeeModel,
+  IApprovalStep,
   ILeaveRequest,
   LeaveBalanceModel,
   LeavePolicyModel,
   LeaveRequestModel,
 } from "@hrmssuite/persistence";
 import mongoose, { Types } from "mongoose";
+import { resolveApproverFromConfig } from "../helpers/resolveApproverFromConfig.helper";
 
 export class LeaveRequestDao {
   // ─────────────────────────────────────────────
@@ -191,7 +193,7 @@ export class LeaveRequestDao {
   public async approveLeaveRequest(
     leaveRequestId: Types.ObjectId,
     approverId: Types.ObjectId,
-    action: "approved" | "rejected",
+    action: "approved" | "rejected" | "escalated",
     remarks?: string,
   ): Promise<ILeaveRequest> {
     const session = await mongoose.startSession();
@@ -201,7 +203,6 @@ export class LeaveRequestDao {
 
       const leave =
         await LeaveRequestModel.findById(leaveRequestId).session(session);
-
       if (!leave) throw new Error("Leave request not found");
       if (leave.status === "approved" || leave.status === "rejected")
         throw new Error("Leave already completed");
@@ -215,50 +216,52 @@ export class LeaveRequestDao {
       if (currentStep.approverId.toString() !== approverId.toString())
         throw new Error("Unauthorized approver");
 
-      currentStep.status = action;
+      // Common log for any action
       currentStep.remarks = remarks ?? "";
       currentStep.actedAt = new Date();
 
-      if (action === "approved") {
-        leave.activityLog.push({
-          action:
-            currentStep.role === "manager"
-              ? "manager_approved"
-              : "admin_approved",
-          performedBy: approverId,
-          performedAt: new Date(),
-          remarks,
-        });
-      }
-
+      // ────────────────────────────────────────
+      // REJECTED
+      // ────────────────────────────────────────
       if (action === "rejected") {
+        currentStep.status = "rejected";
+
         leave.activityLog.push({
           action: "rejected",
           performedBy: approverId,
           performedAt: new Date(),
           remarks,
         });
+
         leave.status = "rejected";
         leave.currentLevel = null;
         leave.audit.updatedBy = approverId;
         leave.audit.updatedAt = new Date();
+
         await leave.save({ session });
         await session.commitTransaction();
         return leave;
       }
 
-      const nextStep = leave.approvalChain.find(
-        (a) => a.level === leave.currentLevel! + 1,
-      );
+      // ────────────────────────────────────────
+      // APPROVED (final approval by this approver)
+      // ────────────────────────────────────────
+      if (action === "approved") {
+        currentStep.status = "approved";
 
-      if (nextStep) {
-        leave.currentLevel = nextStep.level;
-        leave.status = "pending";
-      } else {
+        leave.activityLog.push({
+          action:
+            currentStep.role === "admin"
+              ? "admin_approved"
+              : "manager_approved",
+          performedBy: approverId,
+          performedAt: new Date(),
+          remarks,
+        });
+
         leave.currentLevel = null;
         leave.status = "approved";
 
-        // Race-safe atomic balance update (unchanged)
         const updateResult = await LeaveBalanceModel.updateOne(
           {
             employeeId: leave.employeeId,
@@ -277,10 +280,101 @@ export class LeaveRequestDao {
 
         if (updateResult.modifiedCount === 0)
           throw new Error("Insufficient balance OR concurrent update conflict");
+
+        leave.audit.updatedBy = approverId;
+        leave.audit.updatedAt = new Date();
+
+        await leave.save({ session });
+        await session.commitTransaction();
+        return leave;
       }
+
+      // ────────────────────────────────────────
+      // ESCALATED
+      // ────────────────────────────────────────
+      // action === "escalated"
+      currentStep.status = "pending";
+
+      leave.activityLog.push({
+        action: "escalated",
+        performedBy: approverId,
+        performedAt: new Date(),
+        remarks,
+      });
+
+      // Find next escalation level from policy
+      const policy = await LeavePolicyModel.findById(leave.leavePolicyId)
+        .select("approvalConfig")
+        .session(session);
+      if (!policy) throw new Error("Policy not found for escalation");
+
+      const currentConfigIndex = policy.approvalConfig.findIndex(
+        (step) => step.level === leave.currentLevel,
+      );
+      const nextConfig = policy.approvalConfig[currentConfigIndex + 1];
+
+      if (!nextConfig) {
+        // No further configured level: treat as approved (final)
+        leave.currentLevel = null;
+        leave.status = "approved";
+
+        const updateResult = await LeaveBalanceModel.updateOne(
+          {
+            employeeId: leave.employeeId,
+            companyId: leave.companyId,
+            "leave.policyId": leave.leavePolicyId,
+            "leave.balance": { $gte: leave.totalDays },
+          },
+          {
+            $inc: {
+              "leave.$.used": leave.totalDays,
+              "leave.$.balance": -leave.totalDays,
+            },
+          },
+          { session },
+        );
+
+        if (updateResult.modifiedCount === 0)
+          throw new Error("Insufficient balance OR concurrent update conflict");
+
+        leave.audit.updatedBy = approverId;
+        leave.audit.updatedAt = new Date();
+
+        await leave.save({ session });
+        await session.commitTransaction();
+        return leave;
+      }
+
+      // Resolve approverId for nextConfig.type
+      const nextApproverId = await resolveApproverFromConfig(
+        nextConfig,
+        leave,
+        session,
+      );
+
+      // Add or update next step in chain (no undefined issue)
+      const nextStep = leave.approvalChain.find(
+        (s) => s.level === nextConfig.level,
+      );
+
+      if (!nextStep) {
+        leave.approvalChain.push({
+          level: nextConfig.level,
+          role: nextConfig.type,
+          approverId: nextApproverId,
+          status: "pending",
+        } as IApprovalStep);
+      } else {
+        nextStep.approverId = nextApproverId;
+        nextStep.status = "pending";
+      }
+
+      leave.currentLevel = nextConfig.level;
+      leave.status = "pending";
 
       leave.audit.updatedBy = approverId;
       leave.audit.updatedAt = new Date();
+
       await leave.save({ session });
       await session.commitTransaction();
       return leave;

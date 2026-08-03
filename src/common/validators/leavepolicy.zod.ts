@@ -9,6 +9,18 @@ const AuditZodSchema = z.object({
   updatedAt: z.date().default(() => new Date()),
 });
 
+const ApprovalConfigSchema = z.array(
+  z.object({
+    level: z.number().min(1),
+    type: z.enum([
+      "direct_manager",
+      "manager_of_manager",
+      "department_head",
+      "admin",
+    ]),
+  }),
+);
+
 // ── Base Schema (ZodObject — supports .partial())
 const LeavePolicyBaseSchema = z.object({
   companyId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid ObjectId"),
@@ -27,28 +39,45 @@ const LeavePolicyBaseSchema = z.object({
   advanceNoticeDays: z.number().min(0).default(0),
   backdatedAllowed: z.boolean().default(false),
   maxBackdatedDays: z.number().min(0).nullable().optional(),
-  approvalLevels: z.union([z.literal(1), z.literal(2)]).default(2),
+  approvalLevels: z.number().min(1).max(5).default(5),
+  approvalConfig: ApprovalConfigSchema.default([
+    { level: 1, type: "direct_manager" }, // junior
+    { level: 2, type: "manager_of_manager" }, // senior
+    { level: 3, type: "manager_of_manager" }, // TL (senior’s manager)
+    { level: 4, type: "department_head" }, // manager
+    { level: 5, type: "admin" },
+  ]),
   audit: AuditZodSchema.optional(),
   isActive: z.boolean().default(true),
 });
 
 // ── Full Schema — reuse base, add refines (used for CREATE)
-export const LeavePolicyZodSchema = LeavePolicyBaseSchema  // ✅ no duplicate z.object()
+export const LeavePolicyZodSchema = LeavePolicyBaseSchema.refine(
+  // ✅ no duplicate z.object()
+  (data) => !(data.carryForwardAllowed && !data.maxCarryForwardDays),
+  {
+    message: "maxCarryForwardDays required when carryForwardAllowed is true",
+    path: ["maxCarryForwardDays"],
+  },
+)
+  .refine((data) => !(data.encashmentAllowed && !data.maxEncashmentDays), {
+    message: "maxEncashmentDays required when encashmentAllowed is true",
+    path: ["maxEncashmentDays"],
+  })
+  .refine((data) => !(data.backdatedAllowed && !data.maxBackdatedDays), {
+    message: "maxBackdatedDays required when backdatedAllowed is true",
+    path: ["maxBackdatedDays"],
+  })
   .refine(
-    (data) => !(data.carryForwardAllowed && !data.maxCarryForwardDays),
-    { message: "maxCarryForwardDays required when carryForwardAllowed is true", path: ["maxCarryForwardDays"] },
-  )
-  .refine(
-    (data) => !(data.encashmentAllowed && !data.maxEncashmentDays),
-    { message: "maxEncashmentDays required when encashmentAllowed is true", path: ["maxEncashmentDays"] },
-  )
-  .refine(
-    (data) => !(data.backdatedAllowed && !data.maxBackdatedDays),
-    { message: "maxBackdatedDays required when backdatedAllowed is true", path: ["maxBackdatedDays"] },
-  )
-  .refine(
-    (data) => !(data.maxDaysPerApplication && data.maxDaysPerApplication > data.maxDaysPerYear),
-    { message: "maxDaysPerApplication cannot exceed maxDaysPerYear", path: ["maxDaysPerApplication"] },
+    (data) =>
+      !(
+        data.maxDaysPerApplication &&
+        data.maxDaysPerApplication > data.maxDaysPerYear
+      ),
+    {
+      message: "maxDaysPerApplication cannot exceed maxDaysPerYear",
+      path: ["maxDaysPerApplication"],
+    },
   );
 
 // ── Partial Schema — base only, no refines (used for PATCH)

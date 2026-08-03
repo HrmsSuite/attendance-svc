@@ -32,7 +32,7 @@ export class LeaveRequestServices {
       throw new Error("Cannot apply more than 30 days at once");
     }
 
-     const isHalfDay = data.totalDays % 1 !== 0;
+    const isHalfDay = data.totalDays % 1 !== 0;
     return this.dao.createLeaveRequest(
       {
         ...data,
@@ -51,7 +51,7 @@ export class LeaveRequestServices {
     const data = approveLeaveRequestSchema.parse(input);
 
     // RULE: prevent invalid action spam
-    if (!["approved", "rejected"].includes(data.action)) {
+    if (!["approved", "rejected", "escalated"].includes(data.action)) {
       throw new Error("Invalid action");
     }
 
@@ -70,7 +70,7 @@ export class LeaveRequestServices {
     return this.dao.cancelLeaveRequest(
       new mongoose.Types.ObjectId(data.leaveRequestId),
       new mongoose.Types.ObjectId(data.employeeId),
-       data.cancelReason,
+      data.cancelReason,
     );
   }
 
@@ -81,7 +81,7 @@ export class LeaveRequestServices {
     return this.dao.withdrawLeaveRequest(
       new mongoose.Types.ObjectId(data.leaveRequestId),
       new mongoose.Types.ObjectId(data.employeeId),
-       data.cancelReason,
+      data.cancelReason,
     );
   }
 

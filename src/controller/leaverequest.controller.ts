@@ -215,7 +215,7 @@ export class LeaveRequestController {
   ) => {
     try {
       const companyId = (req as any).user?.companyId;
-      const approverId = (req as any).user?.companyId;
+      const approverId = (req as any).user?.userId; // ✅ or employeeId, whatever your token uses
       if (!companyId || !approverId) throw new Apperror("Unauthorized", 401);
 
       const result = await this.service.getAdminPendingApprovals(

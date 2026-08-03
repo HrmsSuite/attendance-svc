@@ -48,7 +48,7 @@ export const approveLeaveRequestSchema = z.object({
 
   approverId: z.string(),
 
-  action: z.enum(["approved", "rejected"]),
+  action: z.enum(["approved", "rejected", "escalated"]),
 
   remarks: z.string().optional(),
 });
