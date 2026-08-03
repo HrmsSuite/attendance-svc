@@ -129,4 +129,10 @@ export class LeaveRequestServices {
       new mongoose.Types.ObjectId(approverId),
     );
   }
+
+  public async getPendingApprovals(approverId: string) {
+    return this.dao.getPendingApprovals(
+      new mongoose.Types.ObjectId(approverId),
+    );
+  }
 }

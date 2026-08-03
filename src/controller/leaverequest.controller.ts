@@ -215,7 +215,7 @@ export class LeaveRequestController {
   ) => {
     try {
       const companyId = (req as any).user?.companyId;
-      const approverId = (req as any).user?.userId; // ✅ or employeeId, whatever your token uses
+      const approverId = (req as any).user?.employeeId;
       if (!companyId || !approverId) throw new Apperror("Unauthorized", 401);
 
       const result = await this.service.getAdminPendingApprovals(
@@ -223,6 +223,30 @@ export class LeaveRequestController {
         approverId,
       );
       res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public getMyPendingApprovals = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const user = (req as any).user;
+      const approverId = user?.employeeId; // or user.id, depending on your design
+
+      if (!approverId) {
+        throw new Apperror("Unauthorized", 401);
+      }
+
+      const result = await this.service.getPendingApprovals(approverId);
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
     } catch (error) {
       next(error);
     }

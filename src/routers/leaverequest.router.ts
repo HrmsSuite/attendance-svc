@@ -114,6 +114,15 @@ router.get(
   Asyncwrapper((req, res, next) =>
     leaveRequest.getLeaveRequestById(req, res, next),
   ),
+
+  // GET MY PENDING APPROVALS (Manager / Approver)
+  router.get(
+    "/pending",
+    authenticate,
+    Asyncwrapper((req, res, next) =>
+      leaveRequest.getMyPendingApprovals(req, res, next),
+    ),
+  ),
 );
 
 export default router;
