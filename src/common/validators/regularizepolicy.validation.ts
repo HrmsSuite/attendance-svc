@@ -9,11 +9,7 @@ export const AttendanceRegularizationPolicySchema = z.object({
   allowHolidayRegularization: z.boolean(),
   allowMultipleRequestsPerDay: z.boolean(),
   allowAfterPayrollProcessed: z.boolean(),
-  approvalFlow: z.enum([
-    "REPORTING_MANAGER",
-    "HR",
-    "REPORTING_MANAGER_THEN_HR",
-  ]),
+  approverId: z.string(),
   attachmentRequired: z.boolean(),
   reasonMandatory: z.boolean(),
 });

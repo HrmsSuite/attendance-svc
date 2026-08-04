@@ -30,8 +30,7 @@ export class AttendanceRegularizationPolicyController {
 
       res.status(201).json({
         success: true,
-        message:
-          "Attendance regularization policy created successfully",
+        message: "Attendance regularization policy created successfully",
         data: created,
       });
     } catch (error) {
@@ -55,8 +54,7 @@ export class AttendanceRegularizationPolicyController {
 
       res.status(200).json({
         success: true,
-        message:
-          "Attendance regularization policy fetched successfully",
+        message: "Attendance regularization policy fetched successfully",
         data: policy,
       });
     } catch (error) {
@@ -81,8 +79,7 @@ export class AttendanceRegularizationPolicyController {
 
       res.status(200).json({
         success: true,
-        message:
-          "Attendance regularization policy updated successfully",
+        message: "Attendance regularization policy updated successfully",
         data: updated,
       });
     } catch (error) {
@@ -105,16 +102,12 @@ export class AttendanceRegularizationPolicyController {
         );
 
       if (!deleted) {
-        throw new Apperror(
-          "Attendance regularization policy not found",
-          404,
-        );
+        throw new Apperror("Attendance regularization policy not found", 404);
       }
 
       res.status(200).json({
         success: true,
-        message:
-          "Attendance regularization policy deleted successfully",
+        message: "Attendance regularization policy deleted successfully",
         data: deleted,
       });
     } catch (error) {

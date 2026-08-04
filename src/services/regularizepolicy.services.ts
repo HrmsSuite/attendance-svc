@@ -22,7 +22,14 @@ export class AttendanceRegularizationPolicyService {
     console.log("CREATE POLICY SERVICE HIT");
     const validated = AttendanceRegularizationPolicySchema.parse(payload);
 
-    AttendanceRegularizationPolicyHelper.validatePolicy(validated);
+    const approverId = validated.approverId
+      ? new Types.ObjectId(validated.approverId)
+      : undefined;
+
+    AttendanceRegularizationPolicyHelper.validatePolicy({
+      ...validated,
+      approverId,
+    });
 
     const existing =
       await this.attendanceRegularizationPolicyDao.getAttendanceRegularizationPolicy(
@@ -35,7 +42,10 @@ export class AttendanceRegularizationPolicyService {
 
     return this.attendanceRegularizationPolicyDao.createAttendanceRegularizationPolicy(
       companyId,
-      validated,
+      {
+        ...validated,
+        approverId,
+      } as any, // adjust typing once interface is updated
     );
   }
 
@@ -67,14 +77,22 @@ export class AttendanceRegularizationPolicyService {
       throw new Error("Attendance regularization policy not found");
     }
 
+    const approverId = validated.approverId
+      ? new Types.ObjectId(validated.approverId)
+      : existing.approverId;
+
     AttendanceRegularizationPolicyHelper.validatePolicy({
       ...existing,
       ...validated,
+      approverId,
     });
 
     return this.attendanceRegularizationPolicyDao.updateAttendanceRegularizationPolicy(
       companyId,
-      validated,
+      {
+        ...validated,
+        approverId,
+      } as any,
     );
   }
 
