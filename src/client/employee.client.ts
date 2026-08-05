@@ -13,6 +13,7 @@ export interface IEmployee {
     job: {
       employeeStatus: string;
       shiftId: string;
+      reportingManagerId:string;
       attendanceMode: string;
       department: string;
     };
