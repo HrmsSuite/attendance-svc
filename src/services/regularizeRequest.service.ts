@@ -1,12 +1,11 @@
 // services/attendanceRegularization.service.ts
 
-import { Types } from "mongoose";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 
 import {
+  AttendanceDaily,
   IAttendanceRegularization,
   RegularizationStatus,
-  AttendanceDaily,
 } from "@hrmssuite/persistence";
 
 import {
@@ -15,23 +14,30 @@ import {
   ForbiddenError,
   NotFoundError,
 } from "../common/errors";
+
 import {
-  AttendanceRegularizationHistoryHelper,
   AttendanceRegularizationAttendanceHelper,
+  AttendanceRegularizationHistoryHelper,
   AttendanceRegularizationValidationHelper,
+  resolvePolicyApprover,
 } from "../helpers";
+
 import {
   CreateAttendanceRegularizationDto,
   createAttendanceRegularizationSchema,
   UpdateAttendanceRegularizationDto,
   updateAttendanceRegularizationSchema,
 } from "../common/validators";
+
 import { EmployeeClient } from "../client/employee.client";
+
 import {
   AttendanceRegularizationDao,
   AttendanceRegularizationPolicyDao,
 } from "../daos";
+
 import { IShiftData } from "../typings";
+import { AttendanceRegularizationListResult } from "../typings/regularize.typings";
 
 export interface SubmitRegularizationContext {
   monthlyRequestCount: number;
@@ -46,13 +52,48 @@ interface AttendanceSnapshot {
   lastCheckOut: Date | null;
 }
 
+function toObjectId(value: unknown, fieldName: string): Types.ObjectId {
+  let normalizedValue: unknown = value;
+
+  /*
+   * Supports values such as:
+   *
+   * "6a64921043abb8d597520348"
+   *
+   * and:
+   *
+   * { "$oid": "6a64921043abb8d597520348" }
+   */
+  if (value && typeof value === "object" && "$oid" in value) {
+    normalizedValue = (value as { $oid?: unknown }).$oid;
+  }
+
+  if (
+    typeof normalizedValue !== "string" ||
+    !Types.ObjectId.isValid(normalizedValue)
+  ) {
+    throw new BadRequestError(`${fieldName} must be a valid MongoDB ObjectId.`);
+  }
+
+  return new Types.ObjectId(normalizedValue);
+}
+
 export class AttendanceRegularizationService {
-  private attendanceRegularizationDao = new AttendanceRegularizationDao();
-  private attendanceRegularizationPolicyDao =
+  private readonly attendanceRegularizationDao =
+    new AttendanceRegularizationDao();
+
+  private readonly attendanceRegularizationPolicyDao =
     new AttendanceRegularizationPolicyDao();
-  private employeeClient: EmployeeClient;
+
+  private readonly employeeClient: EmployeeClient;
 
   constructor(employeeClient: EmployeeClient) {
+    if (!employeeClient) {
+      throw new Error(
+        "EmployeeClient is required by AttendanceRegularizationService.",
+      );
+    }
+
     this.employeeClient = employeeClient;
   }
 
@@ -62,9 +103,9 @@ export class AttendanceRegularizationService {
   public async createDraft(
     companyId: Types.ObjectId,
     employeeId: Types.ObjectId,
-    approverId: Types.ObjectId,
     attendance: AttendanceSnapshot,
     payload: CreateAttendanceRegularizationDto,
+    authToken: string,
   ): Promise<IAttendanceRegularization> {
     const validated = createAttendanceRegularizationSchema.parse(payload);
 
@@ -79,7 +120,25 @@ export class AttendanceRegularizationService {
         companyId,
       );
 
-    const attendanceDailyId = new Types.ObjectId(validated.attendanceDailyId);
+    if (!policy) {
+      throw new BadRequestError(
+        "Attendance regularization policy not configured.",
+      );
+    }
+
+    AttendanceRegularizationValidationHelper.validatePolicyEnabled(policy);
+
+    const approverId = await resolvePolicyApprover(
+      companyId,
+      policy,
+      authToken,
+      this.employeeClient,
+    );
+
+    const attendanceDailyId = toObjectId(
+      validated.attendanceDailyId,
+      "attendanceDailyId",
+    );
 
     const existing =
       await this.attendanceRegularizationDao.getActiveAttendanceRegularization(
@@ -88,45 +147,43 @@ export class AttendanceRegularizationService {
         attendanceDailyId,
       );
 
-    if (policy) {
-      AttendanceRegularizationValidationHelper.validateDuplicateRequest(
-        policy,
-        !!existing,
-      );
-    } else if (existing) {
-      throw new ConflictError(
-        "A draft or pending regularization request already exists.",
-      );
-    }
+    AttendanceRegularizationValidationHelper.validateDuplicateRequest(
+      policy,
+      Boolean(existing),
+    );
 
-    const request = AttendanceRegularizationHistoryHelper.build(
-      // actually BuilderHelper in your code
-      // using your existing builder helper
+    const request: Omit<
+      IAttendanceRegularization,
+      "createdAt" | "updatedAt" | "isDeleted" | "deletedAt"
+    > = {
       companyId,
       employeeId,
       approverId,
-      {
-        attendanceDailyId,
-        attendanceDate: attendance.attendanceDate,
-        currentCheckIn: attendance.firstCheckIn ?? undefined,
-        currentCheckOut: attendance.lastCheckOut ?? undefined,
-      },
-      validated,
-      RegularizationStatus.DRAFT,
-    );
+      attendanceDailyId,
+      attendanceDate: attendance.attendanceDate,
+      currentCheckIn: attendance.firstCheckIn ?? undefined,
+      currentCheckOut: attendance.lastCheckOut ?? undefined,
+      regularizationType: validated.regularizationType,
+      requestedCheckIn: validated.requestedCheckIn,
+      requestedCheckOut: validated.requestedCheckOut,
+      status: RegularizationStatus.DRAFT,
+      reason: validated.reason,
+      requestSource: validated.requestSource,
+      attachments: validated.attachments,
+      approvalHistory: [],
+      isAttendanceUpdated: false,
+      payrollAffected: false,
+      createdBy: employeeId,
+    };
 
     return this.attendanceRegularizationDao.createAttendanceRegularization(
       companyId,
-      request as unknown as Omit<
-        IAttendanceRegularization,
-        "createdAt" | "updatedAt" | "isDeleted" | "deletedAt"
-      >,
+      request,
     );
   }
 
   /**
-   * Update Draft — atomic: only succeeds if the caller owns the request
-   * and it is still in DRAFT.
+   * Update Draft
    */
   public async updateDraft(
     companyId: Types.ObjectId,
@@ -157,8 +214,9 @@ export class AttendanceRegularizationService {
     };
 
     if (validated.attendanceDailyId) {
-      updateData.attendanceDailyId = new Types.ObjectId(
+      updateData.attendanceDailyId = toObjectId(
         validated.attendanceDailyId,
+        "attendanceDailyId",
       );
     }
 
@@ -210,14 +268,14 @@ export class AttendanceRegularizationService {
   }
 
   /**
-   * Submit Draft — runs full policy validation, then atomically flips
-   * DRAFT -> PENDING.
+   * Submit Draft
    */
   public async submitDraft(
     companyId: Types.ObjectId,
     employeeId: Types.ObjectId,
     requestId: Types.ObjectId,
     context: SubmitRegularizationContext,
+    authToken: string,
   ): Promise<IAttendanceRegularization> {
     const request =
       await this.attendanceRegularizationDao.getAttendanceRegularizationById(
@@ -249,38 +307,54 @@ export class AttendanceRegularizationService {
     }
 
     AttendanceRegularizationValidationHelper.validatePolicyEnabled(policy);
+
     AttendanceRegularizationValidationHelper.validateBackdatedDays(
       policy,
       request.attendanceDate,
     );
+
     AttendanceRegularizationValidationHelper.validateMonthlyLimit(
       policy,
       context.monthlyRequestCount,
     );
+
     AttendanceRegularizationValidationHelper.validateHoliday(
       policy,
       context.isHoliday,
     );
+
     AttendanceRegularizationValidationHelper.validateWeekOff(
       policy,
       context.isWeekOff,
     );
+
     AttendanceRegularizationValidationHelper.validatePayrollLock(
       policy,
       context.payrollProcessed,
     );
+
     AttendanceRegularizationValidationHelper.validateReason(
       policy,
       request.reason,
     );
+
     AttendanceRegularizationValidationHelper.validateAttachment(
       policy,
       request.attachments,
     );
+
     AttendanceRegularizationValidationHelper.validateRequestedTime(
       request.regularizationType,
       request.requestedCheckIn,
       request.requestedCheckOut,
+    );
+
+    // Uses policy.approverId and validates it through EmployeeClient.
+    const approverId = await resolvePolicyApprover(
+      companyId,
+      policy,
+      authToken,
+      this.employeeClient,
     );
 
     const historyEntry = AttendanceRegularizationHistoryHelper.build(
@@ -296,6 +370,7 @@ export class AttendanceRegularizationService {
       RegularizationStatus.DRAFT,
       {
         status: RegularizationStatus.PENDING,
+        approverId,
         updatedBy: employeeId,
       },
       historyEntry,
@@ -315,7 +390,7 @@ export class AttendanceRegularizationService {
   }
 
   /**
-   * Withdraw — employee-only, PENDING -> WITHDRAWN.
+   * Withdraw: PENDING -> WITHDRAWN
    */
   public async withdraw(
     companyId: Types.ObjectId,
@@ -354,13 +429,13 @@ export class AttendanceRegularizationService {
   }
 
   /**
-   * Approve — approver-only, PENDING -> APPROVED.
-   * Also updates AttendanceDaily in the same transaction.
+   * Approve: PENDING -> APPROVED
    */
   public async approve(
     companyId: Types.ObjectId,
     requestId: Types.ObjectId,
     approverId: Types.ObjectId,
+    authToken: string,
     remarks?: string,
   ): Promise<IAttendanceRegularization> {
     const request =
@@ -383,7 +458,6 @@ export class AttendanceRegularizationService {
       );
     }
 
-    // Load AttendanceDaily
     const daily = await AttendanceDaily.findOne({
       companyId,
       employeeId: request.employeeId,
@@ -394,10 +468,8 @@ export class AttendanceRegularizationService {
       throw new NotFoundError("Attendance daily record not found.");
     }
 
-    // Load shift config
-    const shift = await this.getShiftForRecord(daily);
+    const shift = await this.getShiftForRecord(daily, authToken);
 
-    // Build attendance update using helper
     const attendanceUpdate =
       AttendanceRegularizationAttendanceHelper.buildAttendanceUpdate(
         daily,
@@ -406,6 +478,7 @@ export class AttendanceRegularizationService {
       );
 
     const session = await mongoose.startSession();
+
     session.startTransaction();
 
     try {
@@ -420,24 +493,24 @@ export class AttendanceRegularizationService {
         );
 
       if (!updated) {
-        await session.abortTransaction();
         throw new ConflictError(
           "Request could not be approved. It may have already been processed.",
         );
       }
 
       await session.commitTransaction();
+
       return updated;
-    } catch (err) {
+    } catch (error) {
       await session.abortTransaction();
-      throw err;
+      throw error;
     } finally {
       await session.endSession();
     }
   }
 
   /**
-   * Reject — approver-only, PENDING -> REJECTED. Remarks mandatory.
+   * Reject: PENDING -> REJECTED
    */
   public async reject(
     companyId: Types.ObjectId,
@@ -487,7 +560,7 @@ export class AttendanceRegularizationService {
   }
 
   /**
-   * Read helpers
+   * Get request by ID
    */
   public async getById(
     companyId: Types.ObjectId,
@@ -511,10 +584,22 @@ export class AttendanceRegularizationService {
     employeeId: Types.ObjectId,
     page = 1,
     limit = 20,
-  ): Promise<IAttendanceRegularization[]> {
+  ): Promise<AttendanceRegularizationListResult> {
     return this.attendanceRegularizationDao.getEmployeeAttendanceRegularizations(
       companyId,
       employeeId,
+      page,
+      limit,
+    );
+  }
+
+  public listAllForCompany(
+    companyId: Types.ObjectId,
+    page = 1,
+    limit = 20,
+  ): Promise<AttendanceRegularizationListResult> {
+    return this.attendanceRegularizationDao.getAllAttendanceRegularizations(
+      companyId,
       page,
       limit,
     );
@@ -525,7 +610,7 @@ export class AttendanceRegularizationService {
     approverId: Types.ObjectId,
     page = 1,
     limit = 20,
-  ): Promise<IAttendanceRegularization[]> {
+  ): Promise<AttendanceRegularizationListResult> {
     return this.attendanceRegularizationDao.getPendingAttendanceRegularizations(
       companyId,
       approverId,
@@ -534,13 +619,30 @@ export class AttendanceRegularizationService {
     );
   }
 
+  public listMyRequests(
+    companyId: Types.ObjectId,
+    employeeId: Types.ObjectId,
+    page = 1,
+    limit = 20,
+  ): Promise<AttendanceRegularizationListResult> {
+    return this.attendanceRegularizationDao.getEmployeeAttendanceRegularizations(
+      companyId,
+      employeeId,
+      page,
+      limit,
+    );
+  }
+
   /**
-   * Helper to load shift data for a given attendance daily record.
+   * Load shift data
    */
-  private async getShiftForRecord(daily: {
-    companyId: Types.ObjectId;
-    shiftId?: Types.ObjectId | null;
-  }): Promise<IShiftData> {
+  private async getShiftForRecord(
+    daily: {
+      companyId: Types.ObjectId;
+      shiftId?: Types.ObjectId | null;
+    },
+    authToken: string,
+  ): Promise<IShiftData> {
     if (!daily.shiftId) {
       throw new BadRequestError(
         "Shift ID is missing for this attendance record.",
@@ -550,7 +652,7 @@ export class AttendanceRegularizationService {
     const shiftDoc = await this.employeeClient.getShift(
       daily.shiftId.toString(),
       daily.companyId.toString(),
-      "", // authToken if needed; adapt as per your setup
+      authToken,
     );
 
     if (!shiftDoc) {
@@ -565,14 +667,15 @@ export class AttendanceRegularizationService {
   }
 
   /**
-   * Figures out *why* an atomic transition returned null (not found /
-   * wrong owner / already moved to a different status) and throws the
-   * precise error. Only called on the unhappy path.
+   * Explain failed atomic transition
    */
   private async assertTransitionFailureReason(
     companyId: Types.ObjectId,
     requestId: Types.ObjectId,
-    owner: { employeeId?: Types.ObjectId; approverId?: Types.ObjectId },
+    owner: {
+      employeeId?: Types.ObjectId;
+      approverId?: Types.ObjectId;
+    },
     expectedStatus: RegularizationStatus,
   ): Promise<never> {
     const existing =
@@ -608,30 +711,9 @@ export class AttendanceRegularizationService {
     );
   }
 
-  public async getApproverIdForEmployee(
-    companyId: Types.ObjectId,
-    employeeId: Types.ObjectId,
-    authToken: string,
-  ): Promise<Types.ObjectId> {
-    const employee = await this.employeeClient.getEmployee(
-      employeeId.toString(),
-      companyId.toString(),
-      authToken,
-    );
-
-    if (!employee) {
-      throw new NotFoundError("Employee not found.");
-    }
-
-    const reportingManagerId = employee.data.job.reportingManagerId;
-
-    if (!reportingManagerId) {
-      throw new BadRequestError("Reporting manager is not configured.");
-    }
-
-    return new Types.ObjectId(reportingManagerId);
-  }
-
+  /**
+   * Build submit context
+   */
   public async buildSubmitContext(
     companyId: Types.ObjectId,
     employeeId: Types.ObjectId,
@@ -663,9 +745,6 @@ export class AttendanceRegularizationService {
     };
   }
 
-  /**
-   * Get requests by status
-   */
   public getByStatus(
     companyId: Types.ObjectId,
     status: RegularizationStatus,
@@ -680,9 +759,6 @@ export class AttendanceRegularizationService {
     );
   }
 
-  /**
-   * Get requests for a specific attendance date
-   */
   public getByDate(
     companyId: Types.ObjectId,
     date: Date,
@@ -690,9 +766,6 @@ export class AttendanceRegularizationService {
     return this.attendanceRegularizationDao.getByDate(companyId, date);
   }
 
-  /**
-   * Get requests for a month
-   */
   public getByMonth(
     companyId: Types.ObjectId,
     year: number,
@@ -701,9 +774,6 @@ export class AttendanceRegularizationService {
     return this.attendanceRegularizationDao.getByMonth(companyId, year, month);
   }
 
-  /**
-   * Employee + Status
-   */
   public getByEmployeeAndStatus(
     companyId: Types.ObjectId,
     employeeId: Types.ObjectId,
@@ -716,9 +786,6 @@ export class AttendanceRegularizationService {
     );
   }
 
-  /**
-   * Payroll Engine
-   */
   public getForPayrollPeriod(
     companyId: Types.ObjectId,
     from: Date,
@@ -731,16 +798,10 @@ export class AttendanceRegularizationService {
     );
   }
 
-  /**
-   * Pending Count
-   */
   public countPending(companyId: Types.ObjectId): Promise<number> {
     return this.attendanceRegularizationDao.countPending(companyId);
   }
 
-  /**
-   * Dashboard
-   */
   public dashboardStats(companyId: Types.ObjectId) {
     return this.attendanceRegularizationDao.dashboardStats(companyId);
   }

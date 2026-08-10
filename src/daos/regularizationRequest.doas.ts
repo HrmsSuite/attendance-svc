@@ -10,6 +10,7 @@ import {
 } from "@hrmssuite/persistence";
 import { Types } from "mongoose";
 import mongoose from "mongoose";
+import { employeeLookupStages } from "../helpers";
 
 type AttendanceRegularizationUpdateFilter = {
   employeeId?: Types.ObjectId;
@@ -42,12 +43,20 @@ export class AttendanceRegularizationDao {
   public async getAttendanceRegularizationById(
     companyId: Types.ObjectId,
     requestId: Types.ObjectId,
-  ): Promise<IAttendanceRegularization | null> {
-    return AttendanceRegularize.findOne({
-      _id: requestId,
-      companyId,
-      isDeleted: false,
-    }).lean();
+  ): Promise<any | null> {
+    const result = await AttendanceRegularize.aggregate([
+      {
+        $match: {
+          _id: requestId,
+          companyId,
+          isDeleted: false,
+        },
+      },
+
+      ...employeeLookupStages,
+    ]);
+
+    return result[0] ?? null;
   }
 
   /**
@@ -58,16 +67,50 @@ export class AttendanceRegularizationDao {
     employeeId: Types.ObjectId,
     page = 1,
     limit = 20,
-  ): Promise<IAttendanceRegularization[]> {
-    return AttendanceRegularize.find({
+  ): Promise<{
+    data: IAttendanceRegularization[];
+    total: number;
+  }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const skip = (safePage - 1) * safeLimit;
+
+    const filter = {
       companyId,
       employeeId,
       isDeleted: false,
-    })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    };
+
+    const [data, total] = await Promise.all([
+      AttendanceRegularize.aggregate([
+        {
+          $match: filter,
+        },
+
+        {
+          $sort: {
+            createdAt: -1,
+          },
+        },
+
+        {
+          $skip: skip,
+        },
+
+        {
+          $limit: safeLimit,
+        },
+
+        ...employeeLookupStages,
+      ]),
+
+      AttendanceRegularize.countDocuments(filter),
+    ]);
+
+    return {
+      data,
+      total,
+    };
   }
 
   /**
@@ -78,17 +121,51 @@ export class AttendanceRegularizationDao {
     approverId: Types.ObjectId,
     page = 1,
     limit = 20,
-  ): Promise<IAttendanceRegularization[]> {
-    return AttendanceRegularize.find({
+  ): Promise<{
+    data: IAttendanceRegularization[];
+    total: number;
+  }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const skip = (safePage - 1) * safeLimit;
+
+    const filter = {
       companyId,
       approverId,
       status: RegularizationStatus.PENDING,
       isDeleted: false,
-    })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    };
+
+    const [data, total] = await Promise.all([
+      AttendanceRegularize.aggregate([
+        {
+          $match: filter,
+        },
+
+        {
+          $sort: {
+            createdAt: -1,
+          },
+        },
+
+        {
+          $skip: skip,
+        },
+
+        {
+          $limit: safeLimit,
+        },
+
+        ...employeeLookupStages,
+      ]),
+
+      AttendanceRegularize.countDocuments(filter),
+    ]);
+
+    return {
+      data,
+      total,
+    };
   }
 
   /**
@@ -256,11 +333,11 @@ export class AttendanceRegularizationDao {
     }
 
     // Apply update to AttendanceDaily in the same transaction
-    await AttendanceDaily.findOneAndUpdate(
+    const attendanceResult = await AttendanceDaily.findOneAndUpdate(
       {
+        _id: updatedRequest.attendanceDailyId,
         companyId,
         employeeId: updatedRequest.employeeId,
-        attendanceDate: updatedRequest.attendanceDate,
       },
       {
         $set: {
@@ -270,9 +347,23 @@ export class AttendanceRegularizationDao {
         },
       },
       {
+        new: true,
         session,
       },
     );
+
+    console.log("========== ATTENDANCE UPDATE ==========");
+    console.log("Request ID:", requestId.toString());
+    console.log("Attendance ID:", updatedRequest.attendanceDailyId.toString());
+    console.log("Attendance Result:", attendanceResult);
+    console.log("Regularized:", attendanceResult?.regularized);
+    console.log("========================================");
+
+    if (!attendanceResult) {
+      throw new Error(
+        `AttendanceDaily record not found: ${updatedRequest.attendanceDailyId}`,
+      );
+    }
 
     return updatedRequest;
   }
@@ -282,86 +373,150 @@ export class AttendanceRegularizationDao {
     status: RegularizationStatus,
     page = 1,
     limit = 20,
-  ): Promise<IAttendanceRegularization[]> {
-    return AttendanceRegularize.find({
-      companyId,
-      status,
-      isDeleted: false,
-    })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+  ): Promise<any[]> {
+    const skip = (page - 1) * limit;
+
+    return AttendanceRegularize.aggregate([
+      {
+        $match: {
+          companyId,
+          status,
+          isDeleted: false,
+        },
+      },
+
+      {
+        $sort: {
+          createdAt: -1,
+        },
+      },
+
+      {
+        $skip: skip,
+      },
+
+      {
+        $limit: limit,
+      },
+
+      ...employeeLookupStages,
+    ]);
   }
 
   public async getByDate(
     companyId: Types.ObjectId,
     date: Date,
-  ): Promise<IAttendanceRegularization[]> {
+  ): Promise<any[]> {
     const start = new Date(date);
     start.setHours(0, 0, 0, 0);
 
     const end = new Date(date);
     end.setHours(23, 59, 59, 999);
 
-    return AttendanceRegularize.find({
-      companyId,
-      attendanceDate: {
-        $gte: start,
-        $lte: end,
+    return AttendanceRegularize.aggregate([
+      {
+        $match: {
+          companyId,
+          attendanceDate: {
+            $gte: start,
+            $lte: end,
+          },
+          isDeleted: false,
+        },
       },
-      isDeleted: false,
-    }).lean();
+
+      {
+        $sort: {
+          createdAt: -1,
+        },
+      },
+
+      ...employeeLookupStages,
+    ]);
   }
 
   public async getByMonth(
     companyId: Types.ObjectId,
     year: number,
     month: number,
-  ): Promise<IAttendanceRegularization[]> {
+  ): Promise<any[]> {
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 1);
 
-    return AttendanceRegularize.find({
-      companyId,
-      attendanceDate: {
-        $gte: start,
-        $lt: end,
+    return AttendanceRegularize.aggregate([
+      {
+        $match: {
+          companyId,
+          attendanceDate: {
+            $gte: start,
+            $lt: end,
+          },
+          isDeleted: false,
+        },
       },
-      isDeleted: false,
-    }).lean();
+
+      {
+        $sort: {
+          attendanceDate: -1,
+        },
+      },
+
+      ...employeeLookupStages,
+    ]);
   }
 
   public async getByEmployeeAndStatus(
     companyId: Types.ObjectId,
     employeeId: Types.ObjectId,
     status: RegularizationStatus,
-  ): Promise<IAttendanceRegularization[]> {
-    return AttendanceRegularize.find({
-      companyId,
-      employeeId,
-      status,
-      isDeleted: false,
-    })
-      .sort({ attendanceDate: -1 })
-      .lean();
+  ): Promise<any[]> {
+    return AttendanceRegularize.aggregate([
+      {
+        $match: {
+          companyId,
+          employeeId,
+          status,
+          isDeleted: false,
+        },
+      },
+
+      {
+        $sort: {
+          attendanceDate: -1,
+        },
+      },
+
+      ...employeeLookupStages,
+    ]);
   }
 
   public async getForPayrollPeriod(
     companyId: Types.ObjectId,
     from: Date,
     to: Date,
-  ): Promise<IAttendanceRegularization[]> {
-    return AttendanceRegularize.find({
-      companyId,
-      attendanceDate: {
-        $gte: from,
-        $lte: to,
+  ): Promise<any[]> {
+    return AttendanceRegularize.aggregate([
+      {
+        $match: {
+          companyId,
+          attendanceDate: {
+            $gte: from,
+            $lte: to,
+          },
+          status: RegularizationStatus.APPROVED,
+          payrollAffected: false,
+          isDeleted: false,
+        },
       },
-      status: RegularizationStatus.APPROVED,
-      payrollAffected: false,
-      isDeleted: false,
-    }).lean();
+
+      {
+        $sort: {
+          attendanceDate: 1,
+        },
+      },
+
+      ...employeeLookupStages,
+    ]);
   }
 
   public async countMonthlyRequests(
@@ -414,5 +569,148 @@ export class AttendanceRegularizationDao {
     ]);
 
     return result;
+  }
+
+  /**
+   * Get all regularization requests for a company (paginated).
+   * Includes every status:
+   * DRAFT, PENDING, APPROVED, REJECTED, WITHDRAWN, etc.
+   */
+  public async getAllAttendanceRegularizations(
+    companyId: Types.ObjectId,
+    page = 1,
+    limit = 20,
+  ): Promise<{
+    data: IAttendanceRegularization[];
+    total: number;
+  }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+
+    const skip = (safePage - 1) * safeLimit;
+
+    const filter = {
+      companyId,
+      isDeleted: false,
+    };
+
+    const [data, total] = await Promise.all([
+      AttendanceRegularize.aggregate([
+        {
+          $match: filter,
+        },
+
+        {
+          $sort: {
+            createdAt: -1,
+          },
+        },
+
+        {
+          $skip: skip,
+        },
+
+        {
+          $limit: safeLimit,
+        },
+
+        // Calculate monthly regularization count
+        // for the same employee and attendance month
+        {
+          $lookup: {
+            from: "attendanceregularizations",
+            let: {
+              employeeId: "$employeeId",
+              attendanceDate: "$attendanceDate",
+              companyId: "$companyId",
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      {
+                        $eq: ["$companyId", "$$companyId"],
+                      },
+                      {
+                        $eq: ["$employeeId", "$$employeeId"],
+                      },
+                      {
+                        $eq: ["$isDeleted", false],
+                      },
+                      {
+                        $in: [
+                          "$status",
+                          [
+                            RegularizationStatus.PENDING,
+                            RegularizationStatus.APPROVED,
+                          ],
+                        ],
+                      },
+
+                      // Same year
+                      {
+                        $eq: [
+                          {
+                            $year: "$attendanceDate",
+                          },
+                          {
+                            $year: "$$attendanceDate",
+                          },
+                        ],
+                      },
+
+                      // Same month
+                      {
+                        $eq: [
+                          {
+                            $month: "$attendanceDate",
+                          },
+                          {
+                            $month: "$$attendanceDate",
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+
+              {
+                $count: "count",
+              },
+            ],
+            as: "monthlyRequests",
+          },
+        },
+
+        {
+          $set: {
+            monthlyRequestCount: {
+              $ifNull: [
+                {
+                  $arrayElemAt: ["$monthlyRequests.count", 0],
+                },
+                0,
+              ],
+            },
+          },
+        },
+
+        {
+          $unset: "monthlyRequests",
+        },
+
+        // Employee details + final projection
+        ...employeeLookupStages,
+      ]),
+
+      AttendanceRegularize.countDocuments(filter),
+    ]);
+
+    return {
+      data,
+      total,
+    };
   }
 }

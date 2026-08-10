@@ -1,8 +1,8 @@
 // routes/attendanceRegularization.routes.ts
 
 import { Router } from "express";
-import { authenticate } from "@hrmssuite/persistence"; // adjust import
-import { Asyncwrapper } from "../common/middleware"; // adjust import
+import { authenticate } from "@hrmssuite/persistence";
+import { Asyncwrapper } from "../common/middleware";
 import { AttendanceRegularizationController } from "../controller";
 
 const router = Router();
@@ -13,6 +13,14 @@ router.post(
   "/draft",
   authenticate,
   Asyncwrapper((req, res, next) => controller.createDraft(req, res, next)),
+);
+
+router.get(
+  "/all",
+  authenticate,
+  Asyncwrapper((req, res, next) =>
+    controller.listAllForCompany(req, res, next),
+  ),
 );
 
 // Update Draft
@@ -50,21 +58,21 @@ router.post(
   Asyncwrapper((req, res, next) => controller.reject(req, res, next)),
 );
 
-// Get By Id
+// Pending count must come before /pending
 router.get(
-  "/:id",
+  "/pending/count",
   authenticate,
-  Asyncwrapper((req, res, next) => controller.getById(req, res, next)),
+  Asyncwrapper((req, res, next) => controller.countPending(req, res, next)),
 );
 
-// List For Employee
+// Dashboard stats
 router.get(
-  "/employee/:employeeId",
+  "/dashboard/stats",
   authenticate,
-  Asyncwrapper((req, res, next) => controller.listForEmployee(req, res, next)),
+  Asyncwrapper((req, res, next) => controller.dashboardStats(req, res, next)),
 );
 
-// List Pending For Approver
+// Pending requests
 router.get(
   "/pending",
   authenticate,
@@ -73,24 +81,7 @@ router.get(
   ),
 );
 
-router.get(
-  "/status/:status",
-  authenticate,
-  Asyncwrapper((req, res, next) => controller.getByStatus(req, res, next)),
-);
-
-router.get(
-  "/date",
-  authenticate,
-  Asyncwrapper((req, res, next) => controller.getByDate(req, res, next)),
-);
-
-router.get(
-  "/month",
-  authenticate,
-  Asyncwrapper((req, res, next) => controller.getByMonth(req, res, next)),
-);
-
+// Employee requests by employee ID and status
 router.get(
   "/employee/:employeeId/status/:status",
   authenticate,
@@ -100,6 +91,41 @@ router.get(
 );
 
 router.get(
+  "/my-regularization",
+  authenticate,
+  Asyncwrapper((req, res, next) => controller.listMyRequests(req, res, next)),
+);
+
+// Employee requests
+router.get(
+  "/employee/:employeeId",
+  authenticate,
+  Asyncwrapper((req, res, next) => controller.listForEmployee(req, res, next)),
+);
+
+// Requests by status
+router.get(
+  "/status/:status",
+  authenticate,
+  Asyncwrapper((req, res, next) => controller.getByStatus(req, res, next)),
+);
+
+// Requests by date
+router.get(
+  "/date",
+  authenticate,
+  Asyncwrapper((req, res, next) => controller.getByDate(req, res, next)),
+);
+
+// Requests by month
+router.get(
+  "/month",
+  authenticate,
+  Asyncwrapper((req, res, next) => controller.getByMonth(req, res, next)),
+);
+
+// Requests for payroll period
+router.get(
   "/payroll",
   authenticate,
   Asyncwrapper((req, res, next) =>
@@ -107,16 +133,11 @@ router.get(
   ),
 );
 
+// Get request by ID
 router.get(
-  "/pending/count",
+  "/:id",
   authenticate,
-  Asyncwrapper((req, res, next) => controller.countPending(req, res, next)),
-);
-
-router.get(
-  "/dashboard/stats",
-  authenticate,
-  Asyncwrapper((req, res, next) => controller.dashboardStats(req, res, next)),
+  Asyncwrapper((req, res, next) => controller.getById(req, res, next)),
 );
 
 export default router;

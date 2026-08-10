@@ -58,7 +58,8 @@ export class AttendanceRegularizationAttendanceHelper {
     }
 
     // Optional audit note
-    const note = `Regularized via request ${request._id}`;
+    // const note = `Regularized via request ${request._id}`;
+    const note = `Attendance updated through regularization`;
     update.notes = daily.notes ? `${daily.notes} | ${note}` : note;
 
     return update;

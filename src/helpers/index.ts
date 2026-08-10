@@ -5,3 +5,5 @@ export * from "./attendanceRegularizationBuilder.helper";
 export * from "./attendanceRegularizationHistory.helper";
 export * from "./attendanceRegularizationValidation.helpers";
 export * from "./attendanceRegularizationAttendance.helper";
+export * from "./attendanceRegularizationApprover.helper";
+export * from "./employeeLookup.helper";

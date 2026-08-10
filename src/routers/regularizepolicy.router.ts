@@ -13,7 +13,7 @@ const attendanceRegularizationPolicy =
 router.post(
   "/",
   authenticate,
-  authorizeRoles("admin"),
+  // authorizeRoles("admin"),
   Asyncwrapper((req, res, next) =>
     attendanceRegularizationPolicy.createAttendanceRegularizationPolicyController(
       req,
@@ -27,7 +27,7 @@ router.post(
 router.get(
   "/",
   authenticate,
-  authorizeRoles("admin"),
+  // authorizeRoles("admin"),
   Asyncwrapper((req, res, next) =>
     attendanceRegularizationPolicy.getAttendanceRegularizationPolicyController(
       req,
@@ -41,7 +41,7 @@ router.get(
 router.patch(
   "/",
   authenticate,
-  authorizeRoles("admin"),
+  // authorizeRoles("admin"),
   Asyncwrapper((req, res, next) =>
     attendanceRegularizationPolicy.updateAttendanceRegularizationPolicyController(
       req,

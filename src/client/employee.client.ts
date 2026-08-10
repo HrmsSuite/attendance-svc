@@ -32,7 +32,7 @@ export interface HierarchyMeResponse {
 export class EmployeeClient {
   private employeeSvcUrl =
     process.env.EMPLOYEE_SVC_URL ||
-    "https://employee-service-production-b41c.up.railway.app";
+    "http://employee-svc:8001";
 
   async getEmployee(
     employeeId: string,

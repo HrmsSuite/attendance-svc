@@ -2,17 +2,77 @@
 
 import { NextFunction, Request, Response } from "express";
 import { Types } from "mongoose";
-import { BadRequestError } from "../common/errors";
-import { AttendanceRegularizationService } from "../services";
 import { RegularizationStatus } from "@hrmssuite/persistence";
 
+import { BadRequestError, ForbiddenError } from "../common/errors";
+import { AttendanceRegularizationService } from "../services";
+import { employeeClient } from "../client/employee.client";
+
+function toObjectId(value: unknown, fieldName: string): Types.ObjectId {
+  if (typeof value !== "string" || !Types.ObjectId.isValid(value)) {
+    throw new BadRequestError(`${fieldName} must be a valid MongoDB ObjectId.`);
+  }
+
+  return new Types.ObjectId(value);
+}
+
+function toValidDate(value: unknown, fieldName: string): Date {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new BadRequestError(`${fieldName} is required.`);
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestError(`${fieldName} must be a valid date.`);
+  }
+
+  return date;
+}
+
+function getPagination(req: Request): {
+  page: number;
+  limit: number;
+} {
+  const rawPage = Number(req.query.page);
+  const rawLimit = Number(req.query.limit);
+
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+
+  const limit =
+    Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
+
+  return {
+    page,
+    limit,
+  };
+}
+
+function getEmployeeId(req: Request): Types.ObjectId {
+  const user = req.user as
+    | {
+        employeeId?: unknown;
+      }
+    | undefined;
+
+  return toObjectId(user?.employeeId, "req.user.employeeId");
+}
+
+function getAuthorization(req: Request): string {
+  const authorization = req.headers.authorization;
+
+  if (typeof authorization !== "string" || !authorization.trim()) {
+    throw new BadRequestError("Authorization header is required.");
+  }
+
+  return authorization;
+}
+
 export class AttendanceRegularizationController {
-  private attendanceRegularizationService = new AttendanceRegularizationService(
-    undefined as any, // TODO: inject real EmployeeClient
-  );
+  private readonly attendanceRegularizationService =
+    new AttendanceRegularizationService(employeeClient);
 
   /**
-   * Create Draft Regularization Request
    * POST /attendance-regularizations/draft
    */
   public async createDraft(
@@ -21,10 +81,10 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const employeeId = new Types.ObjectId(
-        (req.user as any).employeeId as string,
-      );
+      const companyId = toObjectId(req.companyId, "req.companyId");
+
+      const employeeId = getEmployeeId(req);
+      const authorization = getAuthorization(req);
 
       const {
         attendanceDailyId,
@@ -37,43 +97,49 @@ export class AttendanceRegularizationController {
         attachments,
       } = req.body;
 
-      if (!attendanceDailyId || !attendanceDate || !regularizationType) {
-        throw new BadRequestError(
-          "attendanceDailyId, attendanceDate, and regularizationType are required.",
-        );
+      const validatedAttendanceDailyId = toObjectId(
+        attendanceDailyId,
+        "attendanceDailyId",
+      );
+
+      if (
+        typeof regularizationType !== "string" ||
+        !regularizationType.trim()
+      ) {
+        throw new BadRequestError("regularizationType is required.");
       }
 
-      const attendance = {
-        attendanceDate: new Date(attendanceDate),
-        firstCheckIn: null as Date | null,
-        lastCheckOut: null as Date | null,
-      };
+      const parsedAttendanceDate = toValidDate(
+        attendanceDate,
+        "attendanceDate",
+      );
 
-      const approverId =
-        await this.attendanceRegularizationService.getApproverIdForEmployee(
-          companyId,
-          employeeId,
-          req.headers.authorization ?? "",
-        );
+      const parsedRequestedCheckIn = requestedCheckIn
+        ? toValidDate(requestedCheckIn, "requestedCheckIn")
+        : undefined;
+
+      const parsedRequestedCheckOut = requestedCheckOut
+        ? toValidDate(requestedCheckOut, "requestedCheckOut")
+        : undefined;
 
       const created = await this.attendanceRegularizationService.createDraft(
         companyId,
         employeeId,
-        approverId,
-        attendance,
         {
-          attendanceDailyId,
-          regularizationType,
+          attendanceDate: parsedAttendanceDate,
+          firstCheckIn: null,
+          lastCheckOut: null,
+        },
+        {
+          attendanceDailyId: validatedAttendanceDailyId.toString(),
+          regularizationType: regularizationType as any,
           requestSource: requestSource ?? "WEB",
-          requestedCheckIn: requestedCheckIn
-            ? new Date(requestedCheckIn)
-            : undefined,
-          requestedCheckOut: requestedCheckOut
-            ? new Date(requestedCheckOut)
-            : undefined,
+          requestedCheckIn: parsedRequestedCheckIn,
+          requestedCheckOut: parsedRequestedCheckOut,
           reason,
           attachments,
         },
+        authorization,
       );
 
       res.status(201).json({
@@ -87,7 +153,6 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * Update Draft
    * PATCH /attendance-regularizations/:id/draft
    */
   public async updateDraft(
@@ -96,11 +161,11 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const employeeId = new Types.ObjectId(
-        (req.user as any).employeeId as string,
-      );
-      const requestId = new Types.ObjectId(req.params.id as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
+
+      const employeeId = getEmployeeId(req);
+
+      const requestId = toObjectId(req.params.id, "request id");
 
       const updated = await this.attendanceRegularizationService.updateDraft(
         companyId,
@@ -120,7 +185,6 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * Submit Draft
    * POST /attendance-regularizations/:id/submit
    */
   public async submitDraft(
@@ -129,17 +193,23 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const employeeId = new Types.ObjectId(
-        (req.user as any).employeeId as string,
+      const companyId = toObjectId(req.companyId, "req.companyId");
+
+      const employeeId = getEmployeeId(req);
+      const authorization = getAuthorization(req);
+
+      const requestId = toObjectId(req.params.id, "request id");
+
+      const attendanceDate = toValidDate(
+        req.body.attendanceDate,
+        "attendanceDate",
       );
-      const requestId = new Types.ObjectId(req.params.id as string);
 
       const context =
         await this.attendanceRegularizationService.buildSubmitContext(
           companyId,
           employeeId,
-          new Date(req.body.attendanceDate),
+          attendanceDate,
         );
 
       const submitted = await this.attendanceRegularizationService.submitDraft(
@@ -147,6 +217,7 @@ export class AttendanceRegularizationController {
         employeeId,
         requestId,
         context,
+        authorization,
       );
 
       res.status(200).json({
@@ -160,7 +231,6 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * Withdraw Request
    * POST /attendance-regularizations/:id/withdraw
    */
   public async withdraw(
@@ -169,11 +239,11 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const employeeId = new Types.ObjectId(
-        (req.user as any).employeeId as string,
-      );
-      const requestId = new Types.ObjectId(req.params.id as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
+
+      const employeeId = getEmployeeId(req);
+
+      const requestId = toObjectId(req.params.id, "request id");
 
       const withdrawn = await this.attendanceRegularizationService.withdraw(
         companyId,
@@ -192,7 +262,6 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * Approve Request
    * POST /attendance-regularizations/:id/approve
    */
   public async approve(
@@ -201,19 +270,24 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const approverId = new Types.ObjectId(
-        (req.user as any).employeeId as string,
-      );
-      const requestId = new Types.ObjectId(req.params.id as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
-      const { remarks } = req.body;
+      const approverId = getEmployeeId(req);
+
+      const requestId = toObjectId(req.params.id, "request id");
+
+      const authorization = req.headers.authorization; // add
+
+      if (typeof authorization !== "string" || !authorization.trim()) {
+        throw new BadRequestError("Authorization header is required.");
+      }
 
       const approved = await this.attendanceRegularizationService.approve(
         companyId,
         requestId,
         approverId,
-        remarks,
+        authorization,
+        req.body.remarks,
       );
 
       res.status(200).json({
@@ -227,7 +301,6 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * Reject Request
    * POST /attendance-regularizations/:id/reject
    */
   public async reject(
@@ -236,15 +309,15 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const approverId = new Types.ObjectId(
-        (req.user as any).employeeId as string,
-      );
-      const requestId = new Types.ObjectId(req.params.id as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
-      const { remarks } = req.body;
+      const approverId = getEmployeeId(req);
 
-      if (!remarks || !remarks.trim()) {
+      const requestId = toObjectId(req.params.id, "request id");
+
+      const remarks = req.body.remarks;
+
+      if (typeof remarks !== "string" || !remarks.trim()) {
         throw new BadRequestError("Remarks are required to reject a request.");
       }
 
@@ -266,7 +339,6 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * Get Request By Id
    * GET /attendance-regularizations/:id
    */
   public async getById(
@@ -275,8 +347,9 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const requestId = new Types.ObjectId(req.params.id as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
+
+      const requestId = toObjectId(req.params.id, "request id");
 
       const request = await this.attendanceRegularizationService.getById(
         companyId,
@@ -294,7 +367,6 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * List Requests For Employee
    * GET /attendance-regularizations/employee/:employeeId
    */
   public async listForEmployee(
@@ -303,23 +375,29 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const employeeId = new Types.ObjectId(req.params.employeeId as string);
-      const page = parseInt(req.query.page as string, 10) || 1;
-      const limit = parseInt(req.query.limit as string, 10) || 20;
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
-      const requests =
-        await this.attendanceRegularizationService.listForEmployee(
-          companyId,
-          employeeId,
-          page,
-          limit,
-        );
+      const employeeId = toObjectId(req.params.employeeId, "employeeId");
+
+      const { page, limit } = getPagination(req);
+
+      const result = await this.attendanceRegularizationService.listForEmployee(
+        companyId,
+        employeeId,
+        page,
+        limit,
+      );
 
       res.status(200).json({
         success: true,
         message: "Employee regularization requests fetched successfully",
-        data: requests,
+        data: result.data,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit),
+        },
       });
     } catch (error) {
       next(error);
@@ -327,7 +405,84 @@ export class AttendanceRegularizationController {
   }
 
   /**
-   * List Pending Requests For Approver
+   * GET /attendance-regularizations/my-regularization
+   */
+  public async listMyRequests(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = toObjectId(req.companyId, "req.companyId");
+      const employeeId = getEmployeeId(req);
+
+      const { page, limit } = getPagination(req);
+
+      const result = await this.attendanceRegularizationService.listMyRequests(
+        companyId,
+        employeeId,
+        page,
+        limit,
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "My regularization requests fetched successfully",
+        data: result.data,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET /regularizerequest/all
+   */
+  public async listAllForCompany(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = toObjectId(req.companyId, "req.companyId");
+
+      const { page, limit } = getPagination(req);
+
+      const result =
+        await this.attendanceRegularizationService.listAllForCompany(
+          companyId,
+          page,
+          limit,
+        );
+
+      console.log("[Regularization][All] Result:", {
+        count: result.data.length,
+        total: result.total,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "All regularization requests fetched successfully",
+        data: result.data,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit),
+        },
+      });
+    } catch (error) {
+      console.error("[Regularization][All] Failed:", error);
+      next(error);
+    }
+  }
+
+  /**
    * GET /attendance-regularizations/pending
    */
   public async listPendingForApprover(
@@ -336,14 +491,12 @@ export class AttendanceRegularizationController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
-      const approverId = new Types.ObjectId(
-        (req.user as any).employeeId as string,
-      );
-      const page = parseInt(req.query.page as string, 10) || 1;
-      const limit = parseInt(req.query.limit as string, 10) || 20;
+      const companyId = toObjectId(req.companyId, "req.companyId");
+      const approverId = getEmployeeId(req);
 
-      const requests =
+      const { page, limit } = getPagination(req);
+
+      const result =
         await this.attendanceRegularizationService.listPendingForApprover(
           companyId,
           approverId,
@@ -354,15 +507,29 @@ export class AttendanceRegularizationController {
       res.status(200).json({
         success: true,
         message: "Pending regularization requests fetched successfully",
-        data: requests,
+        data: result.data,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit),
+        },
       });
     } catch (error) {
       next(error);
     }
   }
-  public async getByStatus(req: Request, res: Response, next: NextFunction) {
+
+  /**
+   * GET /attendance-regularizations/status/:status
+   */
+  public async getByStatus(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
       const status = req.params.status as RegularizationStatus;
 
@@ -380,15 +547,23 @@ export class AttendanceRegularizationController {
         success: true,
         data,
       });
-    } catch (err) {
-      next(err);
+    } catch (error) {
+      next(error);
     }
   }
-  public async getByDate(req: Request, res: Response, next: NextFunction) {
-    try {
-      const companyId = new Types.ObjectId(req.companyId as string);
 
-      const date = new Date(req.query.date as string);
+  /**
+   * GET /attendance-regularizations/date
+   */
+  public async getByDate(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const companyId = toObjectId(req.companyId, "req.companyId");
+
+      const date = toValidDate(req.query.date, "date");
 
       const data = await this.attendanceRegularizationService.getByDate(
         companyId,
@@ -399,16 +574,33 @@ export class AttendanceRegularizationController {
         success: true,
         data,
       });
-    } catch (err) {
-      next(err);
+    } catch (error) {
+      next(error);
     }
   }
-  public async getByMonth(req: Request, res: Response, next: NextFunction) {
+
+  /**
+   * GET /attendance-regularizations/month
+   */
+  public async getByMonth(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
       const year = Number(req.query.year);
       const month = Number(req.query.month);
+
+      if (
+        !Number.isInteger(year) ||
+        !Number.isInteger(month) ||
+        month < 1 ||
+        month > 12
+      ) {
+        throw new BadRequestError("Valid year and month are required.");
+      }
 
       const data = await this.attendanceRegularizationService.getByMonth(
         companyId,
@@ -420,19 +612,23 @@ export class AttendanceRegularizationController {
         success: true,
         data,
       });
-    } catch (err) {
-      next(err);
+    } catch (error) {
+      next(error);
     }
   }
+
+  /**
+   * GET /attendance-regularizations/employee/:employeeId/status/:status
+   */
   public async getByEmployeeAndStatus(
     req: Request,
     res: Response,
     next: NextFunction,
-  ) {
+  ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
-      const employeeId = new Types.ObjectId(req.params.employeeId as string);
+      const employeeId = toObjectId(req.params.employeeId, "employeeId");
 
       const status = req.params.status as RegularizationStatus;
 
@@ -447,20 +643,25 @@ export class AttendanceRegularizationController {
         success: true,
         data,
       });
-    } catch (err) {
-      next(err);
+    } catch (error) {
+      next(error);
     }
   }
+
+  /**
+   * GET /attendance-regularizations/payroll-period
+   */
   public async getForPayrollPeriod(
     req: Request,
     res: Response,
     next: NextFunction,
-  ) {
+  ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
-      const from = new Date(req.query.from as string);
-      const to = new Date(req.query.to as string);
+      const from = toValidDate(req.query.from, "from");
+
+      const to = toValidDate(req.query.to, "to");
 
       const data =
         await this.attendanceRegularizationService.getForPayrollPeriod(
@@ -473,13 +674,21 @@ export class AttendanceRegularizationController {
         success: true,
         data,
       });
-    } catch (err) {
-      next(err);
+    } catch (error) {
+      next(error);
     }
   }
-  public async countPending(req: Request, res: Response, next: NextFunction) {
+
+  /**
+   * GET /attendance-regularizations/pending/count
+   */
+  public async countPending(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
       const count =
         await this.attendanceRegularizationService.countPending(companyId);
@@ -488,13 +697,21 @@ export class AttendanceRegularizationController {
         success: true,
         count,
       });
-    } catch (err) {
-      next(err);
+    } catch (error) {
+      next(error);
     }
   }
-  public async dashboardStats(req: Request, res: Response, next: NextFunction) {
+
+  /**
+   * GET /attendance-regularizations/dashboard
+   */
+  public async dashboardStats(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
     try {
-      const companyId = new Types.ObjectId(req.companyId as string);
+      const companyId = toObjectId(req.companyId, "req.companyId");
 
       const stats =
         await this.attendanceRegularizationService.dashboardStats(companyId);
@@ -503,8 +720,8 @@ export class AttendanceRegularizationController {
         success: true,
         data: stats,
       });
-    } catch (err) {
-      next(err);
+    } catch (error) {
+      next(error);
     }
   }
 }
