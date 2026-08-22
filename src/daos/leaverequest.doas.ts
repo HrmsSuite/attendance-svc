@@ -109,7 +109,6 @@ export class LeaveRequestDao {
 
       if (!leavePolicy) throw new Error("Leave policy not found");
       if (!leaveBalanceDoc) throw new Error("Leave balance not found");
-
       const leaveEntry = leaveBalanceDoc.leave.find(
         (l) => l.policyId.toString() === data.leavePolicyId.toString(),
       );
@@ -123,14 +122,12 @@ export class LeaveRequestDao {
       const stepsToCreate = leavePolicy.approvalConfig
         .filter((step) => step.level <= leavePolicy.approvalLevels)
         .sort((a, b) => a.level - b.level);
-
       for (const stepConfig of stepsToCreate) {
         const approverId = await resolveApproverFromConfig(
           stepConfig,
           { ...data, employeeId, managerId } as ILeaveRequest,
           session,
         );
-
         approvalChain.push({
           level: stepConfig.level,
           role: stepConfig.type,
@@ -138,7 +135,6 @@ export class LeaveRequestDao {
           status: "pending",
         });
       }
-
       const leaveRequest = await LeaveRequestModel.create(
         [
           {
